@@ -230,7 +230,7 @@ class MainActivity : Activity() {
         Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
         if (!changed) return
         Config.save(this, c)
-        Scheduler.ensure(this)
+        try { Scheduler.ensure(this) } catch (t: Throwable) { Diag.record(this, "schedule", t) }
         sendBroadcast(Intent(this, StockWidget::class.java).setAction(StockWidget.ACTION_REFRESH))
     }
 
@@ -329,7 +329,7 @@ class MainActivity : Activity() {
         Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
         if (c.preset == Presets.CUSTOM) preset.setSelection(Presets.NAMES.size - 1, false)
         interval.setText(c.intervalMin.toString())
-        Scheduler.ensure(this)
+        try { Scheduler.ensure(this) } catch (t: Throwable) { Diag.record(this, "schedule", t) }
         sendBroadcast(Intent(this, StockWidget::class.java).setAction(StockWidget.ACTION_REFRESH))
         Toast.makeText(this, if (StockWidget.hasWidgets(this)) "Saved — refreshing" else "Saved. Add the widget from your home screen.", Toast.LENGTH_SHORT).show()
     }

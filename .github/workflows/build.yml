@@ -23,23 +23,6 @@ jobs:
       - name: Smoke tests
         continue-on-error: true
         run: gradle testDebugUnitTest --stacktrace 2>&1 | tee test.log
-      - name: Yahoo probe
-        if: always()
-        run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-          {
-            echo "### yahoo probe (curl)"
-            for h in query1 query2; do
-              code=$(curl -s -o /tmp/y.json -w "%{http_code}" -A "$UA" "https://$h.finance.yahoo.com/v8/finance/chart/MU?interval=1m&range=1d&includePrePost=true")
-              echo "$h no-cookie: $code $(head -c 160 /tmp/y.json)"
-            done
-            curl -s -c /tmp/jar -b /tmp/jar -A "$UA" -o /dev/null https://fc.yahoo.com/ || true
-            crumb=$(curl -s -c /tmp/jar -b /tmp/jar -A "$UA" https://query2.finance.yahoo.com/v1/test/getcrumb)
-            echo "crumb: ${crumb:0:40}"
-            code=$(curl -s -o /tmp/y.json -w "%{http_code}" -c /tmp/jar -b /tmp/jar -A "$UA" "https://query2.finance.yahoo.com/v8/finance/chart/MU?interval=1m&range=1d&includePrePost=true&crumb=$crumb")
-            echo "with cookie+crumb: $code $(head -c 160 /tmp/y.json)"
-          } > probe.md 2>&1
-          cat probe.md
       - name: Collect test output
         if: always()
         run: |
@@ -67,7 +50,6 @@ jobs:
             echo '```'
             grep -vE "^\s*at (org\.gradle|java\.base|jdk\.|worker\.org)" test.log 2>/dev/null | tail -150
             echo '```'
-            cat probe.md 2>/dev/null
           } > notes.md
           head -c 100000 notes.md > notes_trim.md
       - name: Build

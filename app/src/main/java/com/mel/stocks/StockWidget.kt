@@ -52,6 +52,8 @@ class StockWidget : AppWidgetProvider() {
             }
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
+                // A new build starts with a clean slate; old crash reports describe old code.
+                if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) Diag.clear(context)
                 try { Scheduler.ensure(context) } catch (t: Throwable) { Diag.record(context, "schedule", t) }
                 render(context)
             }
