@@ -50,6 +50,26 @@ class SmokeTest {
     }
 
     @Test
+    fun yahooHeaderVariants() {
+        val url = "https://query1.finance.yahoo.com/v8/finance/chart/MU?interval=1m&range=1d&includePrePost=true"
+        val desk = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        val mob = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
+        val variants = listOf(
+            "mobileUA+json" to mapOf("User-Agent" to mob, "Accept" to "application/json"),
+            "desktopUA+json" to mapOf("User-Agent" to desk, "Accept" to "application/json"),
+            "desktopUA+any" to mapOf("User-Agent" to desk, "Accept" to "*/*"),
+            "curlUA+any" to mapOf("User-Agent" to "curl/8.5.0", "Accept" to "*/*"),
+        )
+        for ((name, h) in variants) {
+            val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            h.forEach { (k, v) -> c.setRequestProperty(k, v) }
+            val code = try { c.responseCode } catch (e: Exception) { -1 }
+            println("VARIANT $name -> $code")
+            c.disconnect()
+        }
+    }
+
+    @Test
     fun yahooLive() {
         val cfg = Config.load(app)
         for (sym in listOf("MU", "SNDK", "GC=F")) {
