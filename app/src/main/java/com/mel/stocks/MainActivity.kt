@@ -13,6 +13,9 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
@@ -43,6 +46,11 @@ class MainActivity : Activity() {
     private lateinit var interval: EditText
     private lateinit var morning: EditText
     private lateinit var output: TextView
+    private lateinit var colorPick: Spinner
+    private lateinit var colorHex: EditText
+    private lateinit var opacitySeek: SeekBar
+    private lateinit var opacityLabel: TextView
+    private lateinit var textMode: Spinner
     private lateinit var root: LinearLayout
     private lateinit var genericBox: LinearLayout
     private lateinit var etradeBox: LinearLayout
@@ -128,6 +136,33 @@ class MainActivity : Activity() {
         col.addView(showNames)
         col.addView(Button(this).apply { text = "Save tickers"; setOnClickListener { save() } })
 
+        section("Appearance")
+        hint("Changes show on the widget as you make them.")
+        label("Card color")
+        colorPick = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, Look.SWATCH_NAMES)
+            val idx = Look.SWATCHES.indexOfFirst { (it.second and 0xFFFFFF) == (cfg.bgColor and 0xFFFFFF) }
+            setSelection(if (idx >= 0) idx else Look.SWATCH_NAMES.size - 1, false)
+        }
+        col.addView(colorPick)
+        hint("Or any hex color:")
+        colorHex = field(Look.hex(cfg.bgColor), mono = true)
+        opacityLabel = TextView(this).apply {
+            textSize = 13f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(0, dp(10), 0, 0)
+            text = "Opacity: ${cfg.opacity}%"
+        }
+        col.addView(opacityLabel)
+        opacitySeek = SeekBar(this).apply { max = 100; progress = cfg.opacity }
+        col.addView(opacitySeek)
+        label("Text color")
+        textMode = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, Look.TEXT_MODES)
+            setSelection(Look.TEXT_MODES.indexOf(cfg.textMode).coerceAtLeast(0), false)
+        }
+        col.addView(textMode)
+
         section("Data source")
         hint("Pick a preset, or paste any JSON quote API. {symbol} and {key} are filled in per ticker.")
         preset = Spinner(this).apply {
@@ -207,6 +242,34 @@ class MainActivity : Activity() {
         }
         col.addView(output)
 
+        colorPick.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                Look.SWATCHES.getOrNull(position)?.let { colorHex.setText(Look.hex(it.second)) }
+                preview()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        colorHex.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(e: Editable?) {
+                val c = Look.parseHex(e.toString()) ?: return
+                val idx = Look.SWATCHES.indexOfFirst { (it.second and 0xFFFFFF) == (c and 0xFFFFFF) }
+                val want = if (idx >= 0) idx else Look.SWATCH_NAMES.size - 1
+                if (colorPick.selectedItemPosition != want) colorPick.setSelection(want, false)
+                preview()
+            }
+        })
+        opacitySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) { opacityLabel.text = "Opacity: $p%" }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) = preview()
+        })
+        textMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) = preview()
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
         preset.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 Presets.byName(Presets.NAMES[position])?.let(::applyPreset)
@@ -239,6 +302,17 @@ class MainActivity : Activity() {
         if (!ready) return
         etStatus.text = Etrade.status(this)
         showSourceFields()
+    }
+
+    /** Persist and redraw the widget immediately so appearance changes can be judged in place. */
+    private fun preview() {
+        if (!ready) return
+        try {
+            Config.save(this, current())
+            StockWidget.render(this)
+        } catch (t: Throwable) {
+            Diag.record(this, "preview", t)
+        }
     }
 
     private fun isEtrade() = Presets.NAMES[preset.selectedItemPosition] == Etrade.PRESET
@@ -316,6 +390,9 @@ class MainActivity : Activity() {
             tapUrl = tapUrl.text.toString().trim(),
             intervalMin = interval.text.toString().trim().toIntOrNull()?.let { if (it <= 0) 0 else maxOf(15, it) } ?: 30,
             morning = morning.text.toString().trim(),
+            bgColor = Look.parseHex(colorHex.text.toString()) ?: Config.load(this).bgColor,
+            opacity = opacitySeek.progress,
+            textMode = Look.TEXT_MODES[textMode.selectedItemPosition.coerceAtLeast(0)],
         )
     }
 

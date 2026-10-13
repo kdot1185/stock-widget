@@ -67,10 +67,6 @@ class StockWidget : AppWidgetProvider() {
 
         private val busy = AtomicBoolean(false)
 
-        private const val INK = 0xFF1D1D1F.toInt()
-        private const val MUTED = 0xFF86868B.toInt()
-        private const val UP = 0xFF0B8A47.toInt()
-        private const val DOWN = 0xFFE0281F.toInt()
 
         fun hasWidgets(ctx: Context) =
             AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, StockWidget::class.java)).isNotEmpty()
@@ -132,6 +128,13 @@ class StockWidget : AppWidgetProvider() {
             val cfg = Config.load(ctx)
             val snap = Store.load(ctx)
             val rv = RemoteViews(ctx.packageName, R.layout.widget)
+            val ink = Look.ink(cfg)
+            rv.setInt(R.id.bg, "setColorFilter", cfg.bgColor or 0xFF000000.toInt())
+            rv.setInt(R.id.bg, "setImageAlpha", cfg.opacity.coerceIn(0, 100) * 255 / 100)
+            rv.setTextColor(R.id.updated, ink.muted)
+            rv.setTextColor(R.id.empty, ink.muted)
+            rv.setInt(R.id.refresh, "setColorFilter", ink.icon)
+            rv.setInt(R.id.strip_divider, "setBackgroundColor", ink.divider)
 
             val settings = PendingIntent.getActivity(
                 ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
@@ -165,20 +168,24 @@ class StockWidget : AppWidgetProvider() {
                 val row = RemoteViews(ctx.packageName, R.layout.row)
                 // Rows are recycled: set every property every time.
                 row.setTextViewText(R.id.symbol, t.symbol)
+                row.setTextColor(R.id.symbol, ink.primary)
+                row.setTextColor(R.id.name, ink.muted)
+                row.setTextColor(R.id.session, ink.muted)
+                row.setInt(R.id.divider, "setBackgroundColor", ink.divider)
                 val name = t.label ?: q?.name ?: ""
                 row.setTextViewText(R.id.name, name)
                 row.setViewVisibility(R.id.name, if (cfg.showNames && name.isNotEmpty()) View.VISIBLE else View.GONE)
 
                 row.setTextViewText(R.id.price, q?.price?.let(::price) ?: "—")
-                row.setTextColor(R.id.price, if (q == null || q.stale) MUTED else INK)
+                row.setTextColor(R.id.price, if (q == null || q.stale) ink.muted else ink.primary)
 
                 val pct = q?.pct
                 row.setTextViewText(R.id.change, pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "")
                 row.setTextColor(R.id.change, when {
-                    pct == null || q == null || q.stale -> MUTED
-                    pct > 0.0049 -> UP
-                    pct < -0.0049 -> DOWN
-                    else -> MUTED
+                    pct == null || q == null || q.stale -> ink.muted
+                    pct > 0.0049 -> ink.up
+                    pct < -0.0049 -> ink.down
+                    else -> ink.muted
                 })
 
                 row.setTextViewText(R.id.session, q?.session ?: "")
@@ -210,11 +217,7 @@ class StockWidget : AppWidgetProvider() {
 
         private fun stamp(ctx: Context, millis: Long): String {
             val time = DateFormat.getTimeFormat(ctx).format(Date(millis))
-            val then = Calendar.getInstance().apply { timeInMillis = millis }
-            val now = Calendar.getInstance()
-            val sameDay = then.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-                then.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
-            return if (sameDay) time else SimpleDateFormat("MMM d", Locale.US).format(Date(millis)) + ", " + time
+            return SimpleDateFormat("MMM d", Locale.US).format(Date(millis)) + ", " + time
         }
 
         private fun price(p: Double): String {

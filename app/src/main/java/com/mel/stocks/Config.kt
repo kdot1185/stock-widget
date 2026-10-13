@@ -26,6 +26,9 @@ data class Config(
     val tapUrl: String,
     val intervalMin: Int,
     val morning: String,
+    val bgColor: Int = 0xFFFFFFFF.toInt(),
+    val opacity: Int = 100,
+    val textMode: String = "Auto",
 ) {
     /** One ticker per line (commas also work). Anything after the symbol is a display label: "GC=F Gold". */
     val tickers: List<Ticker>
@@ -81,6 +84,9 @@ data class Config(
                 tapUrl = p.getString("tapUrl", "https://finance.yahoo.com/quote/{symbol}")!!,
                 intervalMin = p.getInt("intervalMin", 30),
                 morning = p.getString("morning", "06:55")!!,
+                bgColor = p.getInt("bgColor", 0xFFFFFFFF.toInt()),
+                opacity = p.getInt("opacity", 100),
+                textMode = p.getString("textMode", "Auto")!!,
             )
         }
 
@@ -102,6 +108,9 @@ data class Config(
                 .putString("tapUrl", c.tapUrl)
                 .putInt("intervalMin", c.intervalMin)
                 .putString("morning", c.morning)
+                .putInt("bgColor", c.bgColor)
+                .putInt("opacity", c.opacity)
+                .putString("textMode", c.textMode)
                 .apply()
         }
 

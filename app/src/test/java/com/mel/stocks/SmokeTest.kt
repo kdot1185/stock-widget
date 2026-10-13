@@ -39,6 +39,16 @@ class SmokeTest {
     }
 
     @Test
+    fun widgetRendersDarkTranslucent() {
+        Config.save(app, Config.load(app).copy(bgColor = 0xFF14213D.toInt(), opacity = 40, textMode = "Auto"))
+        val shadow = Shadows.shadowOf(AppWidgetManager.getInstance(app))
+        shadow.createWidget(StockWidget::class.java, R.layout.widget)
+        StockWidget.render(app)
+        println("DIAG dark: " + Diag.last(app) + " ink=" + Look.ink(Config.load(app)))
+        assertNull(Diag.last(app))
+    }
+
+    @Test
     fun refreshEndToEnd() {
         val shadow = Shadows.shadowOf(AppWidgetManager.getInstance(app))
         shadow.createWidget(StockWidget::class.java, R.layout.widget)
