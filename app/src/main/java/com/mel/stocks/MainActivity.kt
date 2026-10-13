@@ -51,8 +51,30 @@ class MainActivity : Activity() {
     private lateinit var etCode: EditText
     private lateinit var etStatus: TextView
 
+    private var ready = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
+            build()
+            ready = true
+        } catch (t: Throwable) {
+            // Show the failure instead of dying, so it can be screenshotted.
+            Diag.record(this, "settings screen", t)
+            setContentView(ScrollView(this).apply {
+                fitsSystemWindows = true
+                addView(TextView(this@MainActivity).apply {
+                    setPadding(dp(16), dp(48), dp(16), dp(16))
+                    typeface = Typeface.MONOSPACE
+                    textSize = 11f
+                    setTextIsSelectable(true)
+                    text = "Settings failed to open:\n\n" + (Diag.last(this@MainActivity) ?: t.toString())
+                })
+            })
+        }
+    }
+
+    private fun build() {
         val cfg = Config.load(this)
 
         root = LinearLayout(this).apply {
@@ -90,7 +112,7 @@ class MainActivity : Activity() {
             })
             box.addView(Button(this).apply {
                 text = "Clear error"
-                setOnClickListener { Diag.clear(this@MainActivity); root.removeView(box) }
+                setOnClickListener { Diag.clear(this@MainActivity); root.removeView(box); StockWidget.render(this@MainActivity) }
             })
             root.addView(box)
         }
@@ -197,6 +219,11 @@ class MainActivity : Activity() {
     /** Leaving the screen saves too: edits shouldn't depend on finding the button at the bottom. */
     override fun onPause() {
         super.onPause()
+        if (!ready) return
+        try { autosave() } catch (t: Throwable) { Diag.record(this, "autosave", t) }
+    }
+
+    private fun autosave() {
         val c = current()
         if (c.morning.isNotEmpty() && Config.parseTime(c.morning) == null) return
         val changed = c != Config.load(this)
@@ -209,6 +236,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ready) return
         etStatus.text = Etrade.status(this)
         showSourceFields()
     }

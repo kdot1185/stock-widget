@@ -50,7 +50,7 @@ object Quotes {
         return try {
             val url = cfg.requestUrl(symbol)
             if (url.isBlank()) return Result(symbol, error = "No API URL set")
-            body = get(url, cfg.headerMap(symbol))
+            body = if (Yahoo.handles(url)) Yahoo.get(url) { u -> get(u, cfg.headerMap(symbol)) } else get(url, cfg.headerMap(symbol))
             val root = try { JSONTokener(body).nextValue() } catch (e: JSONException) { null }
             if (root !is JSONObject && root !is JSONArray) return Result(symbol, error = "Response isn't JSON", raw = body)
             val price = JsonPath.num(root, cfg.pricePath)
@@ -79,7 +79,7 @@ object Quotes {
         }
     }
 
-    private fun get(url: String, headers: Map<String, String>): String {
+    internal fun get(url: String, headers: Map<String, String>): String {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 7_000
@@ -96,6 +96,74 @@ object Quotes {
             c.disconnect()
         }
     }
+}
+
+/**
+ * Yahoo rate-limits (429) clients that arrive without its session cookie. Do what the website does:
+ * pick up the cookie from fc.yahoo.com, fetch a crumb, send both. On 401/429, refresh the session and
+ * retry once, on the other query host.
+ */
+object Yahoo {
+    private val cookies = java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL)
+    @Volatile private var crumb: String? = null
+    @Volatile private var crumbAt = 0L
+
+    init {
+        if (java.net.CookieHandler.getDefault() == null) java.net.CookieHandler.setDefault(cookies)
+    }
+
+    fun handles(url: String) = url.contains("finance.yahoo.com")
+
+    fun get(url: String, fetch: (String) -> String): String {
+        session(force = false)
+        return try {
+            fetch(withCrumb(url))
+        } catch (e: IOException) {
+            val m = e.message ?: ""
+            if (!(m.startsWith("HTTP 429") || m.startsWith("HTTP 401") || m.startsWith("HTTP 403"))) throw e
+            session(force = true)
+            val other = if (url.contains("query1.")) url.replace("query1.", "query2.") else url.replace("query2.", "query1.")
+            fetch(withCrumb(other))
+        }
+    }
+
+    private fun withCrumb(url: String): String {
+        val c = crumb ?: return url
+        return url + (if (url.contains('?')) "&" else "?") + "crumb=" + java.net.URLEncoder.encode(c, "UTF-8")
+    }
+
+    @Synchronized
+    private fun session(force: Boolean) {
+        if (!force && crumb != null && System.currentTimeMillis() - crumbAt < 6 * 3600_000L) return
+        try { raw("https://fc.yahoo.com/") } catch (e: Exception) { }
+        crumb = try {
+            raw("https://query2.finance.yahoo.com/v1/test/getcrumb").trim()
+                .takeIf { it.isNotEmpty() && it.length < 40 && !it.contains('<') && !it.contains('{') }
+        } catch (e: Exception) { null }
+        crumbAt = System.currentTimeMillis()
+    }
+
+    /** GET that tolerates error statuses (fc.yahoo.com answers 404 but still sets the cookie). */
+    private fun raw(url: String): String {
+        val c = java.net.URL(url).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 7_000
+            c.readTimeout = 8_000
+            c.instanceFollowRedirects = true
+            c.setRequestProperty("User-Agent", UA_DESKTOP)
+            c.setRequestProperty("Accept", "*/*")
+            val code = c.responseCode
+            val st = if (code in 200..299) c.inputStream else c.errorStream
+            val body = st?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) throw IOException("HTTP $code")
+            return body
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    private const val UA_DESKTOP =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 }
 
 /** Last known quotes, kept so a failed refresh shows stale numbers instead of blanks. */
@@ -115,6 +183,7 @@ object Store {
         val attemptAt: Long,   // last refresh attempt
         val failed: Int,       // symbols that failed on the last attempt
         val note: String?,     // overrides the strip, e.g. "E*TRADE sign-in needed"
+        val err: String? = null, // first error from the last attempt
     )
 
     private const val PREFS = "quotes"
@@ -140,6 +209,7 @@ object Store {
         return Snapshot(
             rows, p.getLong("updatedAt", 0L), p.getLong("attemptAt", 0L), p.getInt("failed", 0),
             p.getString("note", null),
+            p.getString("err", null),
         )
     }
 
@@ -148,6 +218,7 @@ object Store {
         val now = System.currentTimeMillis()
         val rows = old.rows.toMutableMap()
         var ok = 0
+        val firstErr = results.firstOrNull { it.error != null }?.error
         for (r in results) {
             if (r.error == null && r.price != null) {
                 ok++
@@ -170,6 +241,7 @@ object Store {
             .putLong("updatedAt", if (ok > 0) now else old.updatedAt)
             .putLong("attemptAt", now)
             .putInt("failed", results.size - ok)
+            .putString("err", firstErr)
             .remove("note")
             .apply()
     }

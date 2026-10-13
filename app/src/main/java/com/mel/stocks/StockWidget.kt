@@ -192,13 +192,18 @@ class StockWidget : AppWidgetProvider() {
         private fun strip(ctx: Context, s: Store.Snapshot, updating: Boolean): String {
             if (updating) return "Updating…"
             s.note?.let { return it }
-            if (s.updatedAt == 0L) return if (s.attemptAt > 0) "Refresh failed · tap ⟳ to retry" else "Not updated yet"
-            val t = stamp(ctx, s.updatedAt)
-            return when {
-                s.failed > 0 && s.attemptAt > s.updatedAt -> "Refresh failed · last $t"
-                s.failed > 0 -> "Updated $t · ${s.failed} failed"
-                else -> "Updated $t"
+            val why = s.err?.let { ": " + it.take(60) } ?: ""
+            val base = if (s.updatedAt == 0L) {
+                if (s.attemptAt > 0) "Refresh failed$why" else "Not updated yet"
+            } else {
+                val t = stamp(ctx, s.updatedAt)
+                when {
+                    s.failed > 0 && s.attemptAt > s.updatedAt -> "Refresh failed$why · last $t"
+                    s.failed > 0 -> "Updated $t · ${s.failed} failed$why"
+                    else -> "Updated $t"
+                }
             }
+            return if (Diag.last(ctx) != null) "⚠ App error logged · tap · $base" else base
         }
 
         private fun stamp(ctx: Context, millis: Long): String {
