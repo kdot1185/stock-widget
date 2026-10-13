@@ -22,7 +22,36 @@ jobs:
           gradle-version: "8.11.1"
       - name: Smoke tests
         continue-on-error: true
-        run: gradle testDebugUnitTest --stacktrace
+        run: gradle testDebugUnitTest --stacktrace 2>&1 | tee test.log
+      - name: Collect test output
+        if: always()
+        run: |
+          {
+            echo '```'
+            for f in app/build/test-results/testDebugUnitTest/*.xml; do
+              [ -f "$f" ] || continue
+              python3 - "$f" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          r = ET.parse(sys.argv[1]).getroot()
+          print(f"SUITE {r.get('name')} tests={r.get('tests')} failures={r.get('failures')} errors={r.get('errors')}")
+          for tc in r.iter('testcase'):
+              bad = [c for c in tc if c.tag in ('failure', 'error')]
+              print(("FAIL " if bad else "ok   ") + tc.get('name'))
+              for b in bad:
+                  print((b.text or '')[:4000])
+          out = r.find('system-out')
+          if out is not None and out.text: print(out.text[-12000:])
+          err = r.find('system-err')
+          if err is not None and err.text: print("STDERR:", err.text[-6000:])
+          PY
+            done
+            echo '```'
+            echo '### gradle tail'
+            echo '```'
+            grep -vE "^\s*at (org\.gradle|java\.base|jdk\.|worker\.org)" test.log 2>/dev/null | tail -150
+            echo '```'
+          } > notes.md
+          head -c 100000 notes.md > notes_trim.md
       - name: Build
         run: gradle assembleDebug --stacktrace
       - name: Rename APK
@@ -34,3 +63,4 @@ jobs:
           name: Build ${{ github.run_number }}
           files: stock-widget-${{ github.run_number }}.apk
           make_latest: true
+          body_path: notes_trim.md
