@@ -83,6 +83,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, 0)
         }
         col.addView(showNames)
+        col.addView(Button(this).apply { text = "Save tickers"; setOnClickListener { save() } })
 
         section("Data source")
         hint("Pick a preset, or paste any JSON quote API. {symbol} and {key} are filled in per ticker.")
@@ -170,6 +171,19 @@ class MainActivity : Activity() {
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+    }
+
+    /** Leaving the screen saves too: edits shouldn't depend on finding the button at the bottom. */
+    override fun onPause() {
+        super.onPause()
+        val c = current()
+        if (c.morning.isNotEmpty() && Config.parseTime(c.morning) == null) return
+        val changed = c != Config.load(this)
+        Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
+        if (!changed) return
+        Config.save(this, c)
+        Scheduler.ensure(this)
+        sendBroadcast(Intent(this, StockWidget::class.java).setAction(StockWidget.ACTION_REFRESH))
     }
 
     override fun onResume() {
