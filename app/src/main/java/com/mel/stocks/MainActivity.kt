@@ -74,6 +74,27 @@ class MainActivity : Activity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         })
 
+        Diag.last(this)?.let { trace ->
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(12), 0, 0) }
+            box.addView(TextView(this).apply {
+                text = "Last error (long-press to copy):"
+                textSize = 13f
+                setTextColor(0xFFE0281F.toInt())
+            })
+            box.addView(TextView(this).apply {
+                text = trace
+                typeface = Typeface.MONOSPACE
+                textSize = 10f
+                maxLines = 14
+                setTextIsSelectable(true)
+            })
+            box.addView(Button(this).apply {
+                text = "Clear error"
+                setOnClickListener { Diag.clear(this@MainActivity); root.removeView(box) }
+            })
+            root.addView(box)
+        }
+
         section("Tickers")
         hint("One per line. Optional label after a space, e.g. \"GC=F Gold\".")
         tickers = field(cfg.tickersText, lines = 5)

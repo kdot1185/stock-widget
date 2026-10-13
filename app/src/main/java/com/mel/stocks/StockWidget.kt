@@ -33,7 +33,7 @@ class StockWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         render(context)
-        Scheduler.ensure(context)
+        try { Scheduler.ensure(context) } catch (t: Throwable) { Diag.record(context, "schedule", t) }
         val snap = Store.load(context)
         if (System.currentTimeMillis() - snap.attemptAt > 10 * 60_000L) refreshAsync(context, goAsync())
     }
@@ -47,12 +47,12 @@ class StockWidget : AppWidgetProvider() {
         when (intent.action) {
             ACTION_REFRESH -> refreshAsync(context, goAsync())
             ACTION_MORNING -> {
-                Scheduler.scheduleMorning(context)
+                try { Scheduler.scheduleMorning(context) } catch (t: Throwable) { Diag.record(context, "morning alarm", t) }
                 refreshAsync(context, goAsync())
             }
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
-                Scheduler.ensure(context)
+                try { Scheduler.ensure(context) } catch (t: Throwable) { Diag.record(context, "schedule", t) }
                 render(context)
             }
             else -> super.onReceive(context, intent)
@@ -88,8 +88,9 @@ class StockWidget : AppWidgetProvider() {
                 Store.record(ctx, Quotes.fetchAll(ctx, Config.load(ctx)))
             } catch (e: AuthNeeded) {
                 Store.note(ctx, "${e.message} · tap here")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 // Keep the last good snapshot; the strip will show the old time.
+                Diag.record(ctx, "refresh", e)
             } finally {
                 busy.set(false)
                 render(ctx)
@@ -100,7 +101,29 @@ class StockWidget : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, StockWidget::class.java))
             if (ids.isEmpty()) return
-            mgr.updateAppWidget(ids, build(ctx, updating))
+            val rv = try {
+                build(ctx, updating)
+            } catch (t: Throwable) {
+                // Never leave the widget blank or crash the app: say what broke, tap opens settings with the trace.
+                Diag.record(ctx, "widget render", t)
+                RemoteViews(ctx.packageName, R.layout.widget).apply {
+                    setTextViewText(R.id.updated, "Error: ${t.javaClass.simpleName}${t.message?.let { " – $it" } ?: ""}")
+                    setViewVisibility(R.id.list, View.GONE)
+                    setViewVisibility(R.id.empty, View.VISIBLE)
+                    setTextViewText(R.id.empty, "Tap for details")
+                    val pi = PendingIntent.getActivity(
+                        ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
+                    )
+                    setOnClickPendingIntent(R.id.updated, pi)
+                    setOnClickPendingIntent(R.id.empty, pi)
+                    setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
+                }
+            }
+            try {
+                mgr.updateAppWidget(ids, rv)
+            } catch (t: Throwable) {
+                Diag.record(ctx, "updateAppWidget", t)
+            }
         }
 
         private fun build(ctx: Context, updating: Boolean): RemoteViews {
