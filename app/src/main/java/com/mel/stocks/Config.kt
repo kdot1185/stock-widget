@@ -170,7 +170,7 @@ object Presets {
 
     const val CUSTOM = "Custom"
 
-    val NAMES = ALL.map { it.name } + CUSTOM
+    val NAMES = ALL.map { it.name } + Etrade.PRESET + CUSTOM
 
     fun byName(n: String) = ALL.firstOrNull { it.name == n }
 }

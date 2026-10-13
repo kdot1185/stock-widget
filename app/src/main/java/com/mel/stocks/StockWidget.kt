@@ -85,7 +85,9 @@ class StockWidget : AppWidgetProvider() {
             if (!busy.compareAndSet(false, true)) return
             try {
                 render(ctx, updating = true)
-                Store.record(ctx, Quotes.fetchAll(Config.load(ctx)))
+                Store.record(ctx, Quotes.fetchAll(ctx, Config.load(ctx)))
+            } catch (e: AuthNeeded) {
+                Store.note(ctx, "${e.message} · tap here")
             } catch (e: Exception) {
                 // Keep the last good snapshot; the strip will show the old time.
             } finally {
@@ -166,6 +168,7 @@ class StockWidget : AppWidgetProvider() {
 
         private fun strip(ctx: Context, s: Store.Snapshot, updating: Boolean): String {
             if (updating) return "Updating…"
+            s.note?.let { return it }
             if (s.updatedAt == 0L) return if (s.attemptAt > 0) "Refresh failed · tap ⟳ to retry" else "Not updated yet"
             val t = stamp(ctx, s.updatedAt)
             return when {

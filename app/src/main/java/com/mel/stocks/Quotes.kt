@@ -29,9 +29,11 @@ object Quotes {
     private const val UA =
         "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
 
-    fun fetchAll(cfg: Config): List<Result> {
+    /** Throws AuthNeeded when the source needs a fresh sign-in (E*TRADE). */
+    fun fetchAll(ctx: Context, cfg: Config): List<Result> {
         val symbols = cfg.tickers.map { it.symbol }.distinct()
         if (symbols.isEmpty()) return emptyList()
+        if (cfg.preset == Etrade.PRESET) return Etrade.fetchAll(ctx, symbols)
         val pool = Executors.newFixedThreadPool(minOf(6, symbols.size))
         return try {
             val futures = pool.invokeAll(symbols.map { s -> Callable { fetchOne(cfg, s) } }, 25, TimeUnit.SECONDS)
@@ -112,6 +114,7 @@ object Store {
         val updatedAt: Long,   // last refresh where at least one quote came back
         val attemptAt: Long,   // last refresh attempt
         val failed: Int,       // symbols that failed on the last attempt
+        val note: String?,     // overrides the strip, e.g. "E*TRADE sign-in needed"
     )
 
     private const val PREFS = "quotes"
@@ -134,7 +137,10 @@ object Store {
                 rows[r.symbol] = r
             }
         } catch (e: JSONException) { }
-        return Snapshot(rows, p.getLong("updatedAt", 0L), p.getLong("attemptAt", 0L), p.getInt("failed", 0))
+        return Snapshot(
+            rows, p.getLong("updatedAt", 0L), p.getLong("attemptAt", 0L), p.getInt("failed", 0),
+            p.getString("note", null),
+        )
     }
 
     fun record(ctx: Context, results: List<Quotes.Result>) {
@@ -164,6 +170,26 @@ object Store {
             .putLong("updatedAt", if (ok > 0) now else old.updatedAt)
             .putLong("attemptAt", now)
             .putInt("failed", results.size - ok)
+            .remove("note")
+            .apply()
+    }
+
+    /** A refresh that couldn't run at all: keep the old numbers (greyed) and say why in the strip. */
+    fun note(ctx: Context, msg: String) {
+        val old = load(ctx)
+        val arr = JSONArray()
+        for (r in old.rows.values) {
+            val o = JSONObject().put("s", r.symbol).put("st", true)
+            r.name?.let { o.put("n", it) }
+            r.price?.let { o.put("p", it) }
+            r.pct?.let { o.put("c", it) }
+            r.session?.let { o.put("x", it) }
+            arr.put(o)
+        }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("rows", arr.toString())
+            .putLong("attemptAt", System.currentTimeMillis())
+            .putString("note", msg)
             .apply()
     }
 }

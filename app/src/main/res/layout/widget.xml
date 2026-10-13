@@ -44,7 +44,7 @@
             android:tint="#FF6E6E73" />
     </LinearLayout>
 
-    <View
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginEnd="6dp"

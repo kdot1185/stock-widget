@@ -43,16 +43,24 @@ class MainActivity : Activity() {
     private lateinit var interval: EditText
     private lateinit var morning: EditText
     private lateinit var output: TextView
+    private lateinit var root: LinearLayout
+    private lateinit var genericBox: LinearLayout
+    private lateinit var etradeBox: LinearLayout
+    private lateinit var etKey: EditText
+    private lateinit var etSecret: EditText
+    private lateinit var etCode: EditText
+    private lateinit var etStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val cfg = Config.load(this)
 
-        col = LinearLayout(this).apply {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(16), dp(20), dp(40))
         }
-        val scroll = ScrollView(this).apply { addView(col) }
+        col = root
+        val scroll = ScrollView(this).apply { addView(root) }
         scroll.setOnApplyWindowInsetsListener { v, insets ->
             val b = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
             v.setPadding(b.left, b.top, b.right, b.bottom)
@@ -84,6 +92,26 @@ class MainActivity : Activity() {
             setSelection(if (idx >= 0) idx else Presets.NAMES.size - 1, false)
         }
         col.addView(preset)
+
+        // E*TRADE: OAuth keys and a daily sign-in instead of URL + paths.
+        etradeBox = box()
+        col = etradeBox
+        hint("Keys from developer.etrade.com (production). E*TRADE ends sessions at midnight ET, so sign in once a day. Futures like GC=F and Yahoo-style symbols won't resolve.")
+        val et = Etrade.load(this)
+        label("Consumer key")
+        etKey = field(et.key, mono = true)
+        label("Consumer secret")
+        etSecret = field(et.secret, mono = true)
+        etStatus = TextView(this).apply { textSize = 13f; setPadding(0, dp(12), 0, dp(4)) }
+        col.addView(etStatus)
+        col.addView(Button(this).apply { text = "1. Sign in to E*TRADE"; setOnClickListener { etradeStart() } })
+        label("Verification code from E*TRADE")
+        etCode = field("", mono = true)
+        col.addView(Button(this).apply { text = "2. Finish sign-in"; setOnClickListener { etradeFinish() } })
+        col = root
+
+        genericBox = box()
+        col = genericBox
         label("API key")
         apiKey = field(cfg.apiKey, mono = true)
         label("Request URL")
@@ -107,6 +135,7 @@ class MainActivity : Activity() {
         timePath = field(cfg.timePath, mono = true)
         regStartPath = field(cfg.regStartPath, mono = true)
         regEndPath = field(cfg.regEndPath, mono = true)
+        col = root
 
         section("Refresh")
         label("Background refresh every N minutes (15 minimum, 0 = off)")
@@ -137,8 +166,56 @@ class MainActivity : Activity() {
         preset.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 Presets.byName(Presets.NAMES[position])?.let(::applyPreset)
+                showSourceFields()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        etStatus.text = Etrade.status(this)
+        showSourceFields()
+    }
+
+    private fun isEtrade() = Presets.NAMES[preset.selectedItemPosition] == Etrade.PRESET
+
+    private fun showSourceFields() {
+        etradeBox.visibility = if (isEtrade()) View.VISIBLE else View.GONE
+        genericBox.visibility = if (isEtrade()) View.GONE else View.VISIBLE
+    }
+
+    private fun etradeStart() {
+        Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
+        etStatus.text = "Contacting E*TRADE…"
+        thread {
+            try {
+                val link = Etrade.startSignIn(this)
+                runOnUiThread {
+                    etStatus.text = "Approve access in the browser, copy the code it shows, paste it below, then tap Finish. The code is good for 5 minutes."
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)))
+                }
+            } catch (e: Exception) {
+                runOnUiThread { etStatus.text = "Sign-in failed: ${e.message}" }
+            }
+        }
+    }
+
+    private fun etradeFinish() {
+        val code = etCode.text.toString().trim()
+        if (code.isEmpty()) { etStatus.text = "Paste the verification code first."; return }
+        etStatus.text = "Finishing sign-in…"
+        thread {
+            try {
+                Etrade.finishSignIn(this, code)
+                runOnUiThread {
+                    etCode.setText("")
+                    etStatus.text = Etrade.status(this)
+                    save()
+                }
+            } catch (e: Exception) {
+                runOnUiThread { etStatus.text = "Couldn't finish sign-in: ${e.message}" }
+            }
         }
     }
 
@@ -186,6 +263,7 @@ class MainActivity : Activity() {
             return
         }
         Config.save(this, c)
+        Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
         if (c.preset == Presets.CUSTOM) preset.setSelection(Presets.NAMES.size - 1, false)
         interval.setText(c.intervalMin.toString())
         Scheduler.ensure(this)
@@ -197,6 +275,20 @@ class MainActivity : Activity() {
         val c = current()
         val sym = c.tickers.firstOrNull()?.symbol
         if (sym == null) { output.text = "Add a ticker first."; return }
+        if (c.preset == Etrade.PRESET) {
+            Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
+            output.text = "Fetching from E*TRADE…"
+            thread {
+                val text = try {
+                    val rs = Etrade.fetchAll(this, c.tickers.map { it.symbol }.distinct())
+                    rs.joinToString("\n") { r ->
+                        r.symbol + "  " + (r.error ?: "${r.price}  ${r.pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: ""}  ${r.session ?: ""}  ${r.name ?: ""}")
+                    } + "\n\nRaw response:\n" + pretty(rs.firstOrNull { it.raw != null }?.raw)
+                } catch (e: Exception) { "ERROR: ${e.message}" }
+                runOnUiThread { output.text = text }
+            }
+            return
+        }
         output.text = "Fetching $sym…\n${c.requestUrl(sym)}"
         thread {
             val r = Quotes.fetchOne(c, sym)
@@ -229,6 +321,12 @@ class MainActivity : Activity() {
     // --- tiny view helpers ---
 
     private fun dp(x: Int) = (x * resources.displayMetrics.density).toInt()
+
+    private fun box(): LinearLayout {
+        val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(b)
+        return b
+    }
 
     private fun section(text: String) {
         col.addView(TextView(this).apply {
