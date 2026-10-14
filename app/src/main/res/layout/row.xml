@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MU / Micron ............ PRE   936.71   -5.29% -->
+<!-- MU  PRE   929.22   -2.50%   -1.8%   +12.4%    (column widths must match header in widget.xml) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/row"
     android:layout_width="match_parent"
@@ -29,7 +29,7 @@
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:textColor="#FF1D1D1F"
-                android:textSize="15dp" />
+                android:textSize="16.5dp" />
 
             <TextView
                 android:id="@+id/name"
@@ -49,7 +49,7 @@
             android:id="@+id/session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:fontFamily="sans-serif-medium"
             android:includeFontPadding="false"
             android:maxLines="1"
@@ -59,29 +59,51 @@
 
         <TextView
             android:id="@+id/price"
-            android:layout_width="wrap_content"
+            android:layout_width="78dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:fontFeatureSettings="tnum"
             android:gravity="end"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:minWidth="84dp"
             android:textColor="#FF1D1D1F"
-            android:textSize="15dp" />
+            android:textSize="16.5dp" />
 
         <TextView
             android:id="@+id/change"
-            android:layout_width="wrap_content"
+            android:layout_width="62dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-medium"
             android:fontFeatureSettings="tnum"
             android:gravity="end"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:minWidth="76dp"
             android:textColor="#FF86868B"
-            android:textSize="15dp" />
+            android:textSize="16.5dp" />
+
+        <TextView
+            android:id="@+id/change5d"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif"
+            android:fontFeatureSettings="tnum"
+            android:gravity="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="#FF86868B"
+            android:textSize="16.5dp" />
+
+        <TextView
+            android:id="@+id/change1m"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif"
+            android:fontFeatureSettings="tnum"
+            android:gravity="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="#FF86868B"
+            android:textSize="16.5dp" />
     </LinearLayout>
 
     <FrameLayout

@@ -49,6 +49,17 @@ class SmokeTest {
     }
 
     @Test
+    fun historyLive() {
+        val err = History.refresh(app, listOf("MU", "SNDK", "META"))
+        println("HISTORY err=$err")
+        for (s in listOf("MU", "SNDK", "META")) {
+            val c = History.load(app, s)
+            val last = c?.days?.lastOrNull()
+            println("HISTORY $s n=${c?.days?.size} last=$last changes(vs last close)=${History.changes(app, s, last?.second)}")
+        }
+    }
+
+    @Test
     fun refreshEndToEnd() {
         val shadow = Shadows.shadowOf(AppWidgetManager.getInstance(app))
         shadow.createWidget(StockWidget::class.java, R.layout.widget)

@@ -83,7 +83,10 @@ class StockWidget : AppWidgetProvider() {
             if (!busy.compareAndSet(false, true)) return
             try {
                 render(ctx, updating = true)
-                Store.record(ctx, Quotes.fetchAll(ctx, Config.load(ctx)))
+                val cfg = Config.load(ctx)
+                Store.record(ctx, Quotes.fetchAll(ctx, cfg))
+                // Daily closes for Δ5D / Δ1M; at most one fetch per symbol per day, failures don't block quotes.
+                try { History.refresh(ctx, cfg.tickers.map { it.symbol }.distinct()) } catch (t: Throwable) { Diag.record(ctx, "history", t) }
             } catch (e: AuthNeeded) {
                 Store.note(ctx, "${e.message} · tap here")
             } catch (e: Throwable) {
@@ -135,6 +138,7 @@ class StockWidget : AppWidgetProvider() {
             rv.setTextColor(R.id.empty, ink.muted)
             rv.setInt(R.id.refresh, "setColorFilter", ink.icon)
             rv.setInt(R.id.strip_divider, "setBackgroundColor", ink.divider)
+            for (h in intArrayOf(R.id.h_price, R.id.h_1d, R.id.h_5d, R.id.h_1m)) rv.setTextColor(h, ink.muted)
 
             val settings = PendingIntent.getActivity(
                 ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
@@ -179,14 +183,20 @@ class StockWidget : AppWidgetProvider() {
                 row.setTextViewText(R.id.price, q?.price?.let(::price) ?: "—")
                 row.setTextColor(R.id.price, if (q == null || q.stale) ink.muted else ink.primary)
 
-                val pct = q?.pct
-                row.setTextViewText(R.id.change, pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "")
-                row.setTextColor(R.id.change, when {
-                    pct == null || q == null || q.stale -> ink.muted
-                    pct > 0.0049 -> ink.up
-                    pct < -0.0049 -> ink.down
-                    else -> ink.muted
-                })
+                val live = q != null && !q.stale
+                fun cell(id: Int, v: Double?) {
+                    row.setTextViewText(id, v?.let(::pctText) ?: "—".takeIf { q?.price != null } ?: "")
+                    row.setTextColor(id, when {
+                        v == null || !live -> ink.muted
+                        v > 0.0049 -> ink.up
+                        v < -0.0049 -> ink.down
+                        else -> ink.muted
+                    })
+                }
+                cell(R.id.change, q?.pct)
+                val (d5, m1) = History.changes(ctx, t.symbol, q?.price)
+                cell(R.id.change5d, d5)
+                cell(R.id.change1m, m1)
 
                 row.setTextViewText(R.id.session, q?.session ?: "")
                 row.setViewVisibility(R.id.session, if (q?.session != null) View.VISIBLE else View.GONE)
@@ -218,6 +228,13 @@ class StockWidget : AppWidgetProvider() {
         private fun stamp(ctx: Context, millis: Long): String {
             val time = DateFormat.getTimeFormat(ctx).format(Date(millis))
             return SimpleDateFormat("MMM d", Locale.US).format(Date(millis)) + ", " + time
+        }
+
+        /** Fits a 60dp column: 2 decimals under 10%, 1 under 100%, none above. */
+        private fun pctText(v: Double): String {
+            val a = abs(v)
+            val f = when { a < 9.995 -> "%+.2f%%"; a < 99.95 -> "%+.1f%%"; else -> "%+.0f%%" }
+            return String.format(Locale.US, f, v)
         }
 
         private fun price(p: Double): String {
