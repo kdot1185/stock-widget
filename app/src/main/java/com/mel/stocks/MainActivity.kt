@@ -29,7 +29,9 @@ import kotlin.concurrent.thread
 class MainActivity : Activity() {
 
     private lateinit var col: LinearLayout
-    private lateinit var tickers: EditText
+    private var tickerLines = mutableListOf<String>()
+    private lateinit var tickerBox: LinearLayout
+    private lateinit var addField: EditText
     private lateinit var showNames: Switch
     private lateinit var preset: Spinner
     private lateinit var apiKey: EditText
@@ -98,12 +100,6 @@ class MainActivity : Activity() {
         }
         setContentView(scroll)
 
-        col.addView(TextView(this).apply {
-            text = "Watchlist"
-            textSize = 26f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        })
-
         Diag.last(this)?.let { trace ->
             val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(12), 0, 0) }
             box.addView(TextView(this).apply {
@@ -126,21 +122,44 @@ class MainActivity : Activity() {
         }
 
         section("Tickers")
-        hint("One per line. Optional label after a space, e.g. \"GC=F Gold\".")
-        tickers = field(cfg.tickersText, lines = 5)
+        tickerLines = cfg.tickersText.split('\n', ',').map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+        tickerBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0x0F000000, 14)
+        }
+        col.addView(tickerBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        drawTickers()
+
+        val addRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, 0)
+        }
+        addField = EditText(this).apply {
+            hint = "Add ticker, e.g. LRCX (or several: LRCX, AMAT)"
+            textSize = 15f
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            setOnEditorActionListener { _, _, _ -> addTickers(); true }
+        }
+        addRow.addView(addField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addRow.addView(Button(this).apply { text = "Add"; setOnClickListener { addTickers() } })
+        col.addView(addRow)
+
         showNames = Switch(this).apply {
             text = "Show company names (two-line rows)"
             isChecked = cfg.showNames
             setPadding(0, dp(8), 0, 0)
         }
+        showNames.setOnCheckedChangeListener { _, _ -> preview() }
         col.addView(showNames)
-        col.addView(Button(this).apply { text = "Save tickers"; setOnClickListener { save() } })
 
         section("Appearance")
         hint("Changes show on the widget as you make them.")
         label("Card color")
         colorPick = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, Look.SWATCH_NAMES)
+            adapter = choices(Look.SWATCH_NAMES)
             val idx = Look.SWATCHES.indexOfFirst { (it.second and 0xFFFFFF) == (cfg.bgColor and 0xFFFFFF) }
             setSelection(if (idx >= 0) idx else Look.SWATCH_NAMES.size - 1, false)
         }
@@ -158,7 +177,7 @@ class MainActivity : Activity() {
         col.addView(opacitySeek)
         label("Text color")
         textMode = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, Look.TEXT_MODES)
+            adapter = choices(Look.TEXT_MODES)
             setSelection(Look.TEXT_MODES.indexOf(cfg.textMode).coerceAtLeast(0), false)
         }
         col.addView(textMode)
@@ -166,7 +185,7 @@ class MainActivity : Activity() {
         section("Data source")
         hint("Pick a preset, or paste any JSON quote API. {symbol} and {key} are filled in per ticker.")
         preset = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, Presets.NAMES)
+            adapter = choices(Presets.NAMES)
             val idx = Presets.NAMES.indexOf(cfg.preset)
             setSelection(if (idx >= 0) idx else Presets.NAMES.size - 1, false)
         }
@@ -374,7 +393,7 @@ class MainActivity : Activity() {
         // Editing a preset's fields by hand turns it into Custom, so the spinner never lies.
         val edited = p != null && (p.url != url.text.toString().trim() || p.pricePath != pricePath.text.toString().trim())
         return Config(
-            tickersText = tickers.text.toString(),
+            tickersText = tickerLines.joinToString("\n"),
             showNames = showNames.isChecked,
             preset = if (edited) Presets.CUSTOM else chosen,
             url = url.text.toString().trim(),
@@ -461,6 +480,120 @@ class MainActivity : Activity() {
     // --- tiny view helpers ---
 
     private fun dp(x: Int) = (x * resources.displayMetrics.density).toInt()
+
+    private val ink: Int by lazy {
+        val a = obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+        val c = a.getColor(0, android.graphics.Color.BLACK)
+        a.recycle()
+        c
+    }
+
+    private fun rounded(color: Int, radiusDp: Int) = android.graphics.drawable.GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radiusDp).toFloat()
+    }
+
+    /** Spinner whose closed state actually shows the selection, in the theme's text color. */
+    private fun choices(items: List<String>) = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
+        override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+            (super.getView(position, convertView, parent) as TextView).apply {
+                setTextColor(ink)
+                textSize = 16f
+                setPadding(dp(4), dp(10), dp(4), dp(10))
+            }
+
+        override fun getDropDownView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+            (super.getDropDownView(position, convertView, parent) as TextView).apply {
+                setTextColor(ink)
+                textSize = 16f
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+            }
+    }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
+    // --- ticker list editor ---
+
+    private fun drawTickers() {
+        tickerBox.removeAllViews()
+        if (tickerLines.isEmpty()) {
+            tickerBox.addView(TextView(this).apply {
+                text = "No tickers yet"
+                alpha = 0.6f
+                textSize = 15f
+                setPadding(dp(14), dp(14), dp(14), dp(14))
+            })
+            return
+        }
+        for ((i, line) in tickerLines.withIndex()) {
+            val parts = line.split(Regex("\\s+"), limit = 2)
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(14), 0, dp(4), 0)
+                minimumHeight = dp(46)
+            }
+            row.addView(TextView(this).apply {
+                text = parts[0].uppercase()
+                textSize = 16f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                setTextColor(ink)
+            })
+            row.addView(TextView(this).apply {
+                text = parts.getOrNull(1) ?: ""
+                textSize = 13f
+                alpha = 0.6f
+                setPadding(dp(8), 0, 0, 0)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            fun icon(label: String, enabled: Boolean, desc: String, onTap: () -> Unit) = TextView(this).apply {
+                text = label
+                textSize = 18f
+                gravity = android.view.Gravity.CENTER
+                contentDescription = desc
+                setTextColor(ink)
+                alpha = if (enabled) 0.75f else 0.15f
+                isEnabled = enabled
+                setOnClickListener { onTap() }
+            }.also { row.addView(it, LinearLayout.LayoutParams(dp(42), dp(42))) }
+            icon("↑", i > 0, "Move up") { move(i, -1) }
+            icon("↓", i < tickerLines.size - 1, "Move down") { move(i, 1) }
+            icon("✕", true, "Remove") { tickerLines.removeAt(i); tickersChanged(refresh = false) }
+            if (i > 0) tickerBox.addView(android.widget.FrameLayout(this).apply {
+                setBackgroundColor(0x14000000)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { marginStart = dp(14) })
+            tickerBox.addView(row)
+        }
+    }
+
+    private fun move(i: Int, by: Int) {
+        val j = i + by
+        if (j !in tickerLines.indices) return
+        tickerLines[i] = tickerLines[j].also { tickerLines[j] = tickerLines[i] }
+        tickersChanged(refresh = false)
+    }
+
+    private fun addTickers() {
+        val have = tickerLines.map { it.split(Regex("\\s+"))[0].uppercase() }.toMutableSet()
+        val new = addField.text.toString().split(Regex("[,;\\s]+")).map { it.trim().uppercase() }
+            .filter { it.isNotEmpty() && have.add(it) }
+        addField.setText("")
+        if (new.isEmpty()) return
+        tickerLines.addAll(new)
+        tickersChanged(refresh = true)
+    }
+
+    /** Ticker edits save immediately; adding fetches quotes for the newcomers. */
+    private fun tickersChanged(refresh: Boolean) {
+        drawTickers()
+        if (!ready) return
+        try {
+            Config.save(this, current())
+            if (refresh) sendBroadcast(Intent(this, StockWidget::class.java).setAction(StockWidget.ACTION_REFRESH))
+            else StockWidget.render(this)
+        } catch (t: Throwable) {
+            Diag.record(this, "tickers", t)
+        }
+    }
 
     private fun box(): LinearLayout {
         val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

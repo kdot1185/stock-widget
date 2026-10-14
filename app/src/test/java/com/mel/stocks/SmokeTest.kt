@@ -22,8 +22,11 @@ class SmokeTest {
     fun settingsOpenEditAndLeave() {
         val c = Robolectric.buildActivity(MainActivity::class.java).setup()
         val a = c.get()
-        val f = MainActivity::class.java.getDeclaredField("tickers").apply { isAccessible = true }
-        (f.get(a) as EditText).setText("AAPL\nMSFT")
+        val add = MainActivity::class.java.getDeclaredField("addField").apply { isAccessible = true }
+        val lines = MainActivity::class.java.getDeclaredField("tickerLines").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST") (lines.get(a) as MutableList<String>).clear()
+        (add.get(a) as EditText).setText("aapl, msft")
+        MainActivity::class.java.getDeclaredMethod("addTickers").apply { isAccessible = true }.invoke(a)
         c.pause().stop().destroy()
         println("DIAG settings: " + Diag.last(app))
         assertEquals("AAPL\nMSFT", Config.load(app).tickersText)
