@@ -59,7 +59,7 @@
 
         <TextView
             android:id="@+id/price"
-            android:layout_width="78dp"
+            android:layout_width="72dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:fontFeatureSettings="tnum"
@@ -71,7 +71,7 @@
 
         <TextView
             android:id="@+id/change"
-            android:layout_width="72dp"
+            android:layout_width="66dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-medium"
             android:fontFeatureSettings="tnum"
@@ -83,7 +83,7 @@
 
         <TextView
             android:id="@+id/change5d"
-            android:layout_width="72dp"
+            android:layout_width="66dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:fontFeatureSettings="tnum"
@@ -95,7 +95,7 @@
 
         <TextView
             android:id="@+id/change1m"
-            android:layout_width="72dp"
+            android:layout_width="66dp"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:fontFeatureSettings="tnum"
