@@ -230,11 +230,17 @@ class StockWidget : AppWidgetProvider() {
             return SimpleDateFormat("MMM d", Locale.US).format(Date(millis)) + ", " + time
         }
 
-        /** Fits a 60dp column: 2 decimals under 10%, 1 under 100%, none above. */
-        private fun pctText(v: Double): String {
+        /**
+         * Accounting style: negatives in parentheses, positives unsigned with an invisible ")" so the % signs line up.
+         * 2 decimals under 10%, 1 under 100%, none above, to fit the column.
+         */
+        private fun pctText(v: Double): CharSequence {
             val a = abs(v)
-            val f = when { a < 9.995 -> "%+.2f%%"; a < 99.95 -> "%+.1f%%"; else -> "%+.0f%%" }
-            return String.format(Locale.US, f, v)
+            val num = String.format(Locale.US, when { a < 9.995 -> "%.2f%%"; a < 99.95 -> "%.1f%%"; else -> "%.0f%%" }, a)
+            if (v < 0 && num.any { it in '1'..'9' }) return "($num)"
+            return android.text.SpannableString("$num)").apply {
+                setSpan(android.text.style.ForegroundColorSpan(android.graphics.Color.TRANSPARENT), num.length, num.length + 1, 0)
+            }
         }
 
         private fun price(p: Double): String {

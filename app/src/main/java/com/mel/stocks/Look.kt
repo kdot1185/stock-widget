@@ -28,11 +28,11 @@ object Look {
 
     private val DARK_TEXT = Ink(
         primary = 0xFF1D1D1F.toInt(), muted = 0xFF86868B.toInt(), divider = 0xFFE8E8ED.toInt(),
-        icon = 0xFF6E6E73.toInt(), up = 0xFF0B8A47.toInt(), down = 0xFFE0281F.toInt(),
+        icon = 0xFF6E6E73.toInt(), up = 0xFF2F55D4.toInt(), down = 0xFFE0281F.toInt(),
     )
     private val LIGHT_TEXT = Ink(
         primary = 0xFFF5F5F7.toInt(), muted = 0xFFA1A1A6.toInt(), divider = 0x33FFFFFF,
-        icon = 0xFFC7C7CC.toInt(), up = 0xFF30D158.toInt(), down = 0xFFFF6B60.toInt(),
+        icon = 0xFFC7C7CC.toInt(), up = 0xFF6F8FFF.toInt(), down = 0xFFFF6B60.toInt(),
     )
 
     fun ink(cfg: Config): Ink = when (cfg.textMode) {

@@ -92,7 +92,7 @@
 
             <TextView
                 android:id="@+id/h_1d"
-                android:layout_width="62dp"
+                android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="end"
@@ -104,7 +104,7 @@
 
             <TextView
                 android:id="@+id/h_5d"
-                android:layout_width="60dp"
+                android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="end"
@@ -116,7 +116,7 @@
 
             <TextView
                 android:id="@+id/h_1m"
-                android:layout_width="60dp"
+                android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="end"
