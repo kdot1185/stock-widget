@@ -40,7 +40,7 @@
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:paddingTop="5dp"
-                android:paddingBottom="3dp"
+                android:paddingBottom="0dp"
                 android:textColor="#FF86868B"
                 android:textSize="12dp" />
 
@@ -63,11 +63,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginEnd="6dp"
-            android:orientation="horizontal"
-            android:paddingBottom="2dp">
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/h_symbol"
+                android:paddingTop="3dp"
+                android:paddingBottom="2dp"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -80,6 +81,8 @@
 
             <TextView
                 android:id="@+id/h_price"
+                android:paddingTop="3dp"
+                android:paddingBottom="2dp"
                 android:layout_width="78dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -92,6 +95,8 @@
 
             <TextView
                 android:id="@+id/h_1d"
+                android:paddingTop="3dp"
+                android:paddingBottom="2dp"
                 android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -104,6 +109,8 @@
 
             <TextView
                 android:id="@+id/h_5d"
+                android:paddingTop="3dp"
+                android:paddingBottom="2dp"
                 android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -116,6 +123,8 @@
 
             <TextView
                 android:id="@+id/h_1m"
+                android:paddingTop="3dp"
+                android:paddingBottom="2dp"
                 android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"

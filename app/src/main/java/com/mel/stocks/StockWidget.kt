@@ -46,6 +46,10 @@ class StockWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_REFRESH -> refreshAsync(context, goAsync())
+            ACTION_SORT_1D, ACTION_SORT_5D, ACTION_SORT_1M -> {
+                Sort.tap(context, intent.action!!.substringAfterLast('_'))
+                render(context)
+            }
             ACTION_MORNING -> {
                 try { Scheduler.scheduleMorning(context) } catch (t: Throwable) { Diag.record(context, "morning alarm", t) }
                 refreshAsync(context, goAsync())
@@ -64,6 +68,9 @@ class StockWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.mel.stocks.REFRESH"
         const val ACTION_MORNING = "com.mel.stocks.MORNING"
+        const val ACTION_SORT_1D = "com.mel.stocks.SORT_1D"
+        const val ACTION_SORT_5D = "com.mel.stocks.SORT_5D"
+        const val ACTION_SORT_1M = "com.mel.stocks.SORT_1M"
 
         private val busy = AtomicBoolean(false)
 
@@ -139,6 +146,18 @@ class StockWidget : AppWidgetProvider() {
             rv.setInt(R.id.refresh, "setColorFilter", ink.icon)
             rv.setInt(R.id.strip_divider, "setBackgroundColor", ink.divider)
             for (h in intArrayOf(R.id.h_price, R.id.h_1d, R.id.h_5d, R.id.h_1m)) rv.setTextColor(h, ink.muted)
+            // Tap a Δ header: sort high→low, tap again low→high, third tap back to your list order.
+            val sort = Sort.load(ctx)
+            for ((id, key, label, action, code) in listOf(
+                Hdr(R.id.h_1d, "1D", "Δ1D", ACTION_SORT_1D, 21),
+                Hdr(R.id.h_5d, "5D", "Δ5D", ACTION_SORT_5D, 22),
+                Hdr(R.id.h_1m, "1M", "Δ1M", ACTION_SORT_1M, 23),
+            )) {
+                val arrow = if (sort.key == key) (if (sort.desc) " ▼" else " ▲") else ""
+                rv.setTextViewText(id, label + arrow)
+                if (sort.key == key) rv.setTextColor(id, ink.primary)
+                rv.setOnClickPendingIntent(id, broadcast(ctx, action, code))
+            }
 
             val settings = PendingIntent.getActivity(
                 ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
@@ -147,7 +166,7 @@ class StockWidget : AppWidgetProvider() {
             rv.setOnClickPendingIntent(R.id.updated, settings)
             rv.setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
 
-            val tickers = cfg.tickers
+            val tickers = Sort.apply(ctx, cfg.tickers, Store.load(ctx))
             if (tickers.isEmpty()) {
                 rv.setViewVisibility(R.id.list, View.GONE)
                 rv.setViewVisibility(R.id.empty, View.VISIBLE)
@@ -309,6 +328,52 @@ object Scheduler {
     fun cancel(ctx: Context) {
         ctx.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
         ctx.getSystemService(AlarmManager::class.java).cancel(StockWidget.broadcast(ctx, StockWidget.ACTION_MORNING, 13))
+    }
+}
+
+private data class Hdr(val id: Int, val key: String, val label: String, val action: String, val code: Int)
+
+/** Sort state for the widget list: which Δ column, which direction, or none (your list order). */
+object Sort {
+    data class State(val key: String?, val desc: Boolean)
+
+    private const val PREFS = "sort"
+
+    fun load(ctx: Context): State {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return State(p.getString("key", null), p.getBoolean("desc", true))
+    }
+
+    /** Cycle: off → high→low → low→high → off. Switching columns starts at high→low. */
+    fun tap(ctx: Context, key: String) {
+        val s = load(ctx)
+        val next = when {
+            s.key != key -> State(key, true)
+            s.desc -> State(key, false)
+            else -> State(null, true)
+        }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("key", next.key).putBoolean("desc", next.desc).apply()
+    }
+
+    fun apply(ctx: Context, tickers: List<Ticker>, snap: Store.Snapshot): List<Ticker> {
+        val s = load(ctx)
+        val key = s.key ?: return tickers
+        fun value(t: Ticker): Double? {
+            val q = snap.rows[t.symbol] ?: return null
+            return when (key) {
+                "1D" -> q.pct
+                "5D" -> History.changes(ctx, t.symbol, q.price).first
+                "1M" -> History.changes(ctx, t.symbol, q.price).second
+                else -> null
+            }
+        }
+        val withVal = tickers.map { it to value(it) }
+        val known = withVal.filter { it.second != null }
+            .sortedBy { it.second!! }
+            .let { if (s.desc) it.reversed() else it }
+        // Tickers without a value keep their list order at the bottom.
+        return known.map { it.first } + withVal.filter { it.second == null }.map { it.first }
     }
 }
 

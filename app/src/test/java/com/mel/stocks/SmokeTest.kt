@@ -60,6 +60,30 @@ class SmokeTest {
     }
 
     @Test
+    fun sortCycles() {
+        val shadow = Shadows.shadowOf(AppWidgetManager.getInstance(app))
+        shadow.createWidget(StockWidget::class.java, R.layout.widget)
+        val snap = Store.Snapshot(
+            mapOf(
+                "A" to Store.Row("A", null, 10.0, -2.0, null, false),
+                "B" to Store.Row("B", null, 10.0, 3.0, null, false),
+                "C" to Store.Row("C", null, 10.0, null, null, false),
+            ), 1L, 1L, 0, null,
+        )
+        val t = listOf(Ticker("A", null), Ticker("B", null), Ticker("C", null))
+        Sort.tap(app, "1D"); val desc = Sort.apply(app, t, snap).map { it.symbol }
+        Sort.tap(app, "1D"); val asc = Sort.apply(app, t, snap).map { it.symbol }
+        Sort.tap(app, "1D"); val off = Sort.apply(app, t, snap).map { it.symbol }
+        println("SORT desc=$desc asc=$asc off=$off")
+        assertEquals(listOf("B", "A", "C"), desc)
+        assertEquals(listOf("A", "B", "C"), asc)
+        assertEquals(listOf("A", "B", "C"), off)
+        app.sendBroadcast(android.content.Intent(app, StockWidget::class.java).setAction(StockWidget.ACTION_SORT_5D))
+        StockWidget.render(app)
+        assertNull(Diag.last(app))
+    }
+
+    @Test
     fun refreshEndToEnd() {
         val shadow = Shadows.shadowOf(AppWidgetManager.getInstance(app))
         shadow.createWidget(StockWidget::class.java, R.layout.widget)
