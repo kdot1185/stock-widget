@@ -167,6 +167,12 @@ class StockWidget : AppWidgetProvider() {
             rv.setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
 
             val tickers = Sort.apply(ctx, cfg.tickers, Store.load(ctx))
+            val sessions = tickers.mapNotNull { snap.rows[it.symbol]?.takeIf { r -> !r.stale }?.session }
+            rv.setTextViewText(R.id.h_price, when {
+                sessions.count { it == "PRE" } * 2 > tickers.size -> "Pre-mkt"
+                sessions.count { it == "AH" } * 2 > tickers.size -> "After hrs"
+                else -> "Last"
+            })
             if (tickers.isEmpty()) {
                 rv.setViewVisibility(R.id.list, View.GONE)
                 rv.setViewVisibility(R.id.empty, View.VISIBLE)
@@ -217,8 +223,8 @@ class StockWidget : AppWidgetProvider() {
                 cell(R.id.change5d, d5)
                 cell(R.id.change1m, m1)
 
-                row.setTextViewText(R.id.session, q?.session ?: "")
-                row.setViewVisibility(R.id.session, if (q?.session != null) View.VISIBLE else View.GONE)
+                // Session (PRE/AH) is shown once in the "Last" header, not per row, so it never squeezes the ticker.
+                row.setViewVisibility(R.id.session, View.GONE)
                 row.setViewVisibility(R.id.divider, if (i < tickers.size - 1) View.VISIBLE else View.INVISIBLE)
                 row.setOnClickFillInIntent(R.id.row, Intent().putExtra(OpenQuoteActivity.EXTRA_SYMBOL, t.symbol))
                 items.addItem(i.toLong(), row)

@@ -29,7 +29,7 @@
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:textColor="#FF1D1D1F"
-                android:textSize="16.5dp" />
+                android:textSize="15.5dp" />
 
             <TextView
                 android:id="@+id/name"
@@ -67,7 +67,7 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#FF1D1D1F"
-            android:textSize="16.5dp" />
+            android:textSize="15.5dp" />
 
         <TextView
             android:id="@+id/change"
@@ -79,7 +79,7 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#FF86868B"
-            android:textSize="16.5dp" />
+            android:textSize="15.5dp" />
 
         <TextView
             android:id="@+id/change5d"
@@ -91,7 +91,7 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#FF86868B"
-            android:textSize="16.5dp" />
+            android:textSize="15.5dp" />
 
         <TextView
             android:id="@+id/change1m"
@@ -103,7 +103,7 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#FF86868B"
-            android:textSize="16.5dp" />
+            android:textSize="15.5dp" />
     </LinearLayout>
 
     <FrameLayout
