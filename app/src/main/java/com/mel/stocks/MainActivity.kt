@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var showNames: Switch
     private lateinit var preset: Spinner
     private lateinit var apiKey: EditText
+    private lateinit var apiSecret: EditText
     private lateinit var url: EditText
     private lateinit var headers: EditText
     private lateinit var pricePath: EditText
@@ -183,7 +184,7 @@ class MainActivity : Activity() {
         col.addView(textMode)
 
         section("Data source")
-        hint("Pick a preset, or paste any JSON quote API. {symbol} and {key} are filled in per ticker.")
+        hint("Pick a preset, or paste any JSON quote API. {symbol}, {key} and {secret} are filled in per ticker.")
         preset = Spinner(this).apply {
             adapter = choices(Presets.NAMES)
             val idx = Presets.NAMES.indexOf(cfg.preset)
@@ -212,6 +213,8 @@ class MainActivity : Activity() {
         col = genericBox
         label("API key")
         apiKey = field(cfg.apiKey, mono = true)
+        label("API secret (only if the source needs one, e.g. Alpaca)")
+        apiSecret = field(cfg.apiSecret, mono = true)
         label("Request URL")
         url = field(cfg.url, lines = 3, mono = true)
         label("Headers (optional)")
@@ -398,6 +401,7 @@ class MainActivity : Activity() {
             preset = if (edited) Presets.CUSTOM else chosen,
             url = url.text.toString().trim(),
             apiKey = apiKey.text.toString().trim(),
+            apiSecret = apiSecret.text.toString().trim(),
             headers = headers.text.toString(),
             pricePath = pricePath.text.toString().trim(),
             prevPath = prevPath.text.toString().trim(),

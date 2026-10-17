@@ -55,11 +55,14 @@ object Quotes {
             if (root !is JSONObject && root !is JSONArray) return Result(symbol, error = "Response isn't JSON", raw = body)
             val price = JsonPath.num(root, cfg.pricePath)
                 ?: return Result(symbol, error = "Price not found at \"${cfg.pricePath}\"", raw = body)
-            val prev = cfg.prevPath.ifBlank { null }?.let { JsonPath.num(root, it) }
+            val alpaca = Alpaca.handles(url)
+            val prev = (if (alpaca) Alpaca.prev(root) else null)
+                ?: cfg.prevPath.ifBlank { null }?.let { JsonPath.num(root, it) }
             val pct = cfg.pctPath.ifBlank { null }?.let { JsonPath.num(root, it) }
                 ?: prev?.takeIf { it != 0.0 }?.let { (price / it - 1.0) * 100.0 }
             val name = cfg.namePath.ifBlank { null }?.let { JsonPath.str(root, it) }
-            Result(symbol, name, price, prev, pct, session(root, cfg), raw = body)
+            val sess = if (alpaca) Alpaca.session(root) else session(root, cfg)
+            Result(symbol, name, price, prev, pct, sess, raw = body)
         } catch (e: Exception) {
             Result(symbol, error = e.message ?: e.javaClass.simpleName, raw = body)
         }
@@ -164,6 +167,40 @@ object Yahoo {
 
     private const val UA_DESKTOP =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+}
+
+/**
+ * Alpaca snapshots carry the latest trade plus two daily bars, but which bar is "yesterday" depends on the
+ * hour: until today's bar exists, dailyBar is still the last session, so it is the previous close. The
+ * snapshot has no session fields either, so PRE/AH comes from the trade's time in New York.
+ */
+object Alpaca {
+    private val ET: java.time.ZoneId = java.time.ZoneId.of("America/New_York")
+
+    fun handles(url: String) = url.contains("data.alpaca.markets")
+
+    private fun at(root: Any?, path: String): java.time.ZonedDateTime? =
+        JsonPath.str(root, path)?.let {
+            try { java.time.Instant.parse(it).atZone(ET) } catch (e: Exception) { null }
+        }
+
+    fun prev(root: Any?): Double? {
+        val tradeDay = at(root, "latestTrade.t")?.toLocalDate()
+        val barDay = at(root, "dailyBar.t")?.toLocalDate()
+        return if (tradeDay != null && barDay != null && barDay.isBefore(tradeDay)) JsonPath.num(root, "dailyBar.c")
+        else JsonPath.num(root, "prevDailyBar.c")
+    }
+
+    /** PRE for 4:00-9:30 ET, AH for 16:00-20:00 ET, by the time of the latest trade. */
+    fun session(root: Any?): String? {
+        val t = at(root, "latestTrade.t") ?: return null
+        val m = t.hour * 60 + t.minute
+        return when {
+            m in 240 until 570 -> "PRE"
+            m in 960 until 1200 -> "AH"
+            else -> null
+        }
+    }
 }
 
 /** Last known quotes, kept so a failed refresh shows stale numbers instead of blanks. */

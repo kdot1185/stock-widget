@@ -29,6 +29,7 @@ data class Config(
     val bgColor: Int = 0xFFFFFFFF.toInt(),
     val opacity: Int = 100,
     val textMode: String = "Auto",
+    val apiSecret: String = "",
 ) {
     /** One ticker per line (commas also work). Anything after the symbol is a display label: "GC=F Gold". */
     val tickers: List<Ticker>
@@ -59,6 +60,8 @@ data class Config(
             .replace("{SYMBOL}", enc(symbol))
             .replace("{key}", enc(apiKey.trim()))
             .replace("{KEY}", enc(apiKey.trim()))
+            .replace("{secret}", enc(apiSecret.trim()))
+            .replace("{SECRET}", enc(apiSecret.trim()))
     }
 
     companion object {
@@ -87,6 +90,7 @@ data class Config(
                 bgColor = p.getInt("bgColor", 0xFFFFFFFF.toInt()),
                 opacity = p.getInt("opacity", 100),
                 textMode = p.getString("textMode", "Auto")!!,
+                apiSecret = p.getString("apiSecret", "")!!,
             )
         }
 
@@ -111,6 +115,7 @@ data class Config(
                 .putInt("bgColor", c.bgColor)
                 .putInt("opacity", c.opacity)
                 .putString("textMode", c.textMode)
+                .putString("apiSecret", c.apiSecret)
                 .apply()
         }
 
@@ -150,8 +155,22 @@ object Presets {
         regEndPath = "chart.result.0.meta.currentTradingPeriod.regular.end",
     )
 
+    /**
+     * Alpaca market-data snapshot. Free accounts get the IEX feed (one exchange, ~2.5% of volume, trading
+     * roughly 8:00-17:00 ET); a paid SIP subscription can switch the URL to feed=sip for every exchange.
+     * Previous close and the PRE/AH tag are worked out in [Alpaca], since the snapshot's bars shift at the open.
+     */
+    val ALPACA = Preset(
+        name = "Alpaca (key + secret)",
+        url = "https://data.alpaca.markets/v2/stocks/{symbol}/snapshot?feed=iex",
+        headers = "APCA-API-KEY-ID: {key}\nAPCA-API-SECRET-KEY: {secret}",
+        pricePath = "latestTrade.p | minuteBar.c | dailyBar.c",
+        prevPath = "prevDailyBar.c",
+    )
+
     val ALL = listOf(
         YAHOO,
+        ALPACA,
         Preset(
             name = "Finnhub (key)",
             url = "https://finnhub.io/api/v1/quote?symbol={symbol}&token={key}",
