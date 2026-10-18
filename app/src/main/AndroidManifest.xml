@@ -52,6 +52,11 @@
         </receiver>
 
         <service
+            android:name=".AutoLoginJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
             android:name=".RefreshJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />

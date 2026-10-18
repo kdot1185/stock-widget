@@ -61,6 +61,9 @@ class MainActivity : Activity() {
     private lateinit var etSecret: EditText
     private lateinit var etCode: EditText
     private lateinit var etStatus: TextView
+    private lateinit var etUser: EditText
+    private lateinit var etPass: EditText
+    private lateinit var autoStatus: TextView
 
     private var ready = false
 
@@ -207,6 +210,23 @@ class MainActivity : Activity() {
         label("Verification code from E*TRADE")
         etCode = field("", mono = true)
         col.addView(Button(this).apply { text = "2. Finish sign-in"; setOnClickListener { etradeFinish() } })
+
+        section("Automatic daily sign-in")
+        hint("Signs in by itself whenever E*TRADE's session has expired (e.g. at your morning refresh): logs in, presses Accept and reads the code. Your login is encrypted on this phone only. If E*TRADE rejects the password it stops trying until you re-save, so it can't lock your account.")
+        autoStatus = TextView(this).apply { textSize = 13f; setPadding(0, dp(8), 0, dp(4)) }
+        col.addView(autoStatus)
+        label("E*TRADE username")
+        etUser = field(AutoLogin.savedUser(this))
+        label("E*TRADE password")
+        etPass = field("").apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = if (AutoLogin.hasCreds(this@MainActivity)) "(saved; type to replace)" else ""
+        }
+        col.addView(Button(this).apply { text = "Save login & sign in now"; setOnClickListener { autoSaveAndTest() } })
+        col.addView(Button(this).apply { text = "Turn off automatic sign-in"; setOnClickListener {
+            AutoLogin.clearCreds(this@MainActivity); etUser.setText(""); etPass.setText(""); etPass.hint = ""
+            autoStatus.text = AutoLogin.status(this@MainActivity)
+        } })
         col = root
 
         genericBox = box()
@@ -323,6 +343,7 @@ class MainActivity : Activity() {
         super.onResume()
         if (!ready) return
         etStatus.text = Etrade.status(this)
+        autoStatus.text = AutoLogin.status(this)
         showSourceFields()
     }
 
@@ -356,6 +377,27 @@ class MainActivity : Activity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread { etStatus.text = "Sign-in failed: ${e.message}" }
+            }
+        }
+    }
+
+    private fun autoSaveAndTest() {
+        val u = etUser.text.toString().trim()
+        val p = etPass.text.toString()
+        if (u.isEmpty()) { autoStatus.text = "Enter your username."; return }
+        if (p.isEmpty() && !AutoLogin.hasCreds(this)) { autoStatus.text = "Enter your password."; return }
+        Etrade.saveKeys(this, etKey.text.toString(), etSecret.text.toString())
+        // Blank password with one already saved = keep the saved one.
+        if (p.isNotEmpty()) AutoLogin.saveCreds(this, u, p)
+        etPass.setText(""); etPass.hint = "(saved; type to replace)"
+        autoStatus.text = "Signing in to E*TRADE… (up to 2 minutes)"
+        thread {
+            val msg = try { AutoLogin.run(this); "Worked. " + AutoLogin.status(this) }
+                      catch (e: Exception) { AutoLogin.status(this) }
+            runOnUiThread {
+                autoStatus.text = msg
+                etStatus.text = Etrade.status(this)
+                save()
             }
         }
     }

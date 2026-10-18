@@ -86,7 +86,7 @@ class StockWidget : AppWidgetProvider() {
         }
 
         /** Blocking: fetch everything, store it, redraw. Concurrent calls collapse into one. */
-        fun refresh(ctx: Context) {
+        fun refresh(ctx: Context, allowAutoLogin: Boolean = true) {
             if (!busy.compareAndSet(false, true)) return
             try {
                 render(ctx, updating = true)
@@ -95,7 +95,9 @@ class StockWidget : AppWidgetProvider() {
                 // Daily closes for Δ5D / Δ1M; at most one fetch per symbol per day, failures don't block quotes.
                 try { History.refresh(ctx, cfg.tickers.map { it.symbol }.distinct()) } catch (t: Throwable) { Diag.record(ctx, "history", t) }
             } catch (e: AuthNeeded) {
-                Store.note(ctx, "${e.message} · tap here")
+                // Saved login → sign in unattended in a background job, which refreshes again when done.
+                if (allowAutoLogin && AutoLogin.request(ctx)) Store.note(ctx, "Signing in to E*TRADE…")
+                else Store.note(ctx, "${e.message} · tap here")
             } catch (e: Throwable) {
                 // Keep the last good snapshot; the strip will show the old time.
                 Diag.record(ctx, "refresh", e)
