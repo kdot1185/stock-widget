@@ -147,6 +147,10 @@ object AutoLogin {
                         lastSeen = res.optString("page").take(240)
                         when (res.optString("state")) {
                             "code" -> { code = res.optString("code"); done.countDown(); return@evaluateJavascript }
+                            "badpw" -> {
+                                failure = BadPassword("E*TRADE rejected the login. Page: $lastSeen")
+                                done.countDown(); return@evaluateJavascript
+                            }
                             "login" -> {
                                 // Login form showing again after we already submitted twice = wrong password.
                                 if (submits >= 2) {
@@ -197,7 +201,9 @@ object AutoLogin {
     private val SCRIPT = """
         var U = __USER__, P = __PASS__;
         function vis(e){ var r=e.getBoundingClientRect(); var s=getComputedStyle(e); return s.display!='none' && s.visibility!='hidden' && (r.width>0||r.height>0); }
-        function setVal(e,v){ var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value'); d.set.call(e,v);
+        function setVal(e,v){ e.focus(); var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value'); d.set.call(e,'');
+            e.dispatchEvent(new Event('input',{bubbles:true})); d.set.call(e,v);
+            e.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true})); e.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true}));
             e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); e.dispatchEvent(new Event('blur',{bubbles:true})); }
         function label(e){ return ((e.innerText||'')+' '+(e.value||'')+' '+(e.getAttribute('aria-label')||'')).trim().toLowerCase(); }
         function buttons(){ return Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],input[type=button],a[role=button]')).filter(vis); }
@@ -210,9 +216,14 @@ object AutoLogin {
         var pw = Array.prototype.slice.call(document.querySelectorAll('input[type=password]')).filter(vis)[0];
         if (pw) {
             out.state = 'login';
+            // E*TRADE's own rejection message: stop immediately, never submit again.
+            if (/doesn.t match our records|incorrect (user|password)|invalid (user|password)|account (is )?locked/i.test(page)) { out.state = 'badpw'; return JSON.stringify(out); }
             if (w.loginAt === here) return JSON.stringify(out);
-            var cands = Array.prototype.slice.call(document.querySelectorAll('input[type=text],input[type=email],input:not([type])')).filter(vis);
-            var un = cands.filter(function(e){ return /user|login|logon|email|id/i.test((e.name||'')+(e.id||'')+(e.getAttribute('autocomplete')||'')); })[0] || cands[0];
+            // Username box: in the same form as the password, never the site search box.
+            var scope = pw.form || document;
+            var cands = Array.prototype.slice.call(scope.querySelectorAll('input[type=text],input[type=email],input[type=tel],input:not([type])')).filter(function(e){
+                return vis(e) && !/search/i.test((e.type||'')+(e.name||'')+(e.id||'')+(e.getAttribute('placeholder')||'')+(e.getAttribute('aria-label')||'')+(e.getAttribute('role')||'')); });
+            var un = cands.filter(function(e){ return /user|login|logon|email/i.test((e.name||'')+(e.id||'')+(e.getAttribute('autocomplete')||'')); })[0] || cands[0];
             if (!un) return JSON.stringify(out);
             setVal(un, U); setVal(pw, P);
             var b = buttons().filter(function(e){ return /log ?on|log ?in|sign ?in|submit|continue/.test(label(e)); })[0];
