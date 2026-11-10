@@ -58,7 +58,7 @@
                 android:tint="#FF6E6E73" />
         </LinearLayout>
 
-        <!-- Column headers: one 10dp line, widths mirror row.xml. -->
+        <!-- Column headers: one 14dp line, widths mirror row.xml. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -67,8 +67,8 @@
 
             <TextView
                 android:id="@+id/h_symbol"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="4dp"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -77,12 +77,12 @@
                 android:maxLines="1"
                 android:text=""
                 android:textColor="#FF86868B"
-                android:textSize="10dp" />
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/h_price"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="4dp"
                 android:layout_width="72dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -91,12 +91,12 @@
                 android:maxLines="1"
                 android:text="Last"
                 android:textColor="#FF86868B"
-                android:textSize="10dp" />
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/h_1d"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="4dp"
                 android:layout_width="66dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -105,12 +105,12 @@
                 android:maxLines="1"
                 android:text="Δ1D"
                 android:textColor="#FF86868B"
-                android:textSize="10dp" />
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/h_5d"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="4dp"
                 android:layout_width="66dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -119,12 +119,12 @@
                 android:maxLines="1"
                 android:text="Δ5D"
                 android:textColor="#FF86868B"
-                android:textSize="10dp" />
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/h_1m"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="4dp"
                 android:layout_width="66dp"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
@@ -133,7 +133,7 @@
                 android:maxLines="1"
                 android:text="Δ1M"
                 android:textColor="#FF86868B"
-                android:textSize="10dp" />
+                android:textSize="14dp" />
         </LinearLayout>
 
         <FrameLayout
