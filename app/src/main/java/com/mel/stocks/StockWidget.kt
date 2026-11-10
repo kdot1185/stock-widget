@@ -263,7 +263,7 @@ class StockWidget : AppWidgetProvider() {
          */
         private fun pctText(v: Double): CharSequence {
             val a = abs(v)
-            val num = String.format(Locale.US, when { a < 9.995 -> "%.2f%%"; a < 99.95 -> "%.1f%%"; else -> "%.0f%%" }, a)
+            val num = String.format(Locale.US, if (a < 99.95) "%.1f%%" else "%.0f%%", a)
             if (v < 0 && num.any { it in '1'..'9' }) return "($num)"
             return android.text.SpannableString("$num)").apply {
                 setSpan(android.text.style.ForegroundColorSpan(android.graphics.Color.TRANSPARENT), num.length, num.length + 1, 0)
