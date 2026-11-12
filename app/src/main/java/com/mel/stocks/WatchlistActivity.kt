@@ -23,13 +23,6 @@ import kotlin.concurrent.thread
  */
 class WatchlistActivity : Activity() {
 
-    private data class Col(val key: String, val title: String, val numeric: Boolean)
-
-    private val cols = listOf(
-        Col(NAME, "Name", false),
-        Col(PRICE, "Last", true),
-    ) + History.Span.values().map { Col(it.label, it.label, true) }
-
     private lateinit var status: TextView
     private lateinit var symHeader: TextView
     private lateinit var headScroll: HorizontalScrollView
@@ -197,16 +190,22 @@ class WatchlistActivity : Activity() {
         fun title(key: String, t: String) = t + if (sort.key == key) (if (sort.desc) " ▼" else " ▲") else ""
         symHeader.text = title(SYMBOL, "Symbol")
         symHeader.setTextColor(if (sort.key == SYMBOL) ink.primary else ink.muted)
-        val heads = cols.map { c ->
-            headerCell(c.key, title(c.key, c.title), c.numeric).apply { if (sort.key == c.key) setTextColor(ink.primary) }
+        val keys = Columns.order(this)
+        val heads = keys.map { k ->
+            headerCell(k, title(k, Columns.title(this, k)), numeric = k != Columns.NOTES).apply {
+                if (sort.key == k) setTextColor(ink.primary)
+                if (k == Columns.NOTES) setOnLongClickListener { notesColumnDialog(); true }
+            }
         }
 
         headRow.removeAllViews()
         symCol.removeAllViews()
         bodyRows.removeAllViews()
         val tickers = TableSort.apply(this, cfg.tickers, snap)
+        val notesFixed = Columns.notesWidthDp(this).takeIf { it > 0 }?.let { dp(it) }
 
-        // Build every cell first, then size each column to its widest entry so nothing is ever cut off.
+        // Build every cell first, then size each column to its widest entry so nothing is ever cut off
+        // (except the notes column, if you've given it a fixed width).
         val symCells = mutableListOf<TextView>()
         val grid = mutableListOf<List<TextView>>()
         for (t in tickers) {
@@ -218,27 +217,37 @@ class WatchlistActivity : Activity() {
                 setOnClickListener(open)
                 background = ripple()
             }
-            grid += cols.map { c ->
-                val v = when (c.key) {
-                    NAME -> null
-                    PRICE -> q?.price
-                    else -> History.Span.of(c.key)?.let { History.totalReturn(this, t.symbol, it, q?.price, q?.pct) }
-                }
-                when (c.key) {
-                    NAME -> cellView(nameOf(t, q), end = false, color = ink.muted, size = 13f)
-                    PRICE -> cellView(v?.let(Fmt::price) ?: "—", end = true, color = if (live) ink.primary else ink.muted, size = 14f)
-                    else -> cellView(v?.let(Fmt::pct) ?: (if (q?.price != null) "—" else ""), end = true,
-                        color = when {
-                            v == null || !live -> ink.muted
-                            v > 0.0049 -> ink.up
-                            v < -0.0049 -> ink.down
-                            else -> ink.muted
-                        }, size = 14f)
+            grid += keys.map { k ->
+                when (k) {
+                    Columns.NOTES -> cellView(Notes.get(this, t.symbol), end = false, color = ink.muted, size = 13f).apply {
+                        if (notesFixed != null) {
+                            isSingleLine = false
+                            maxLines = 2
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                        }
+                        setOnClickListener { editNote(t.symbol) }
+                        background = ripple()
+                    }
+                    Columns.PRICE -> cellView(q?.price?.let(Fmt::price) ?: "—", end = true,
+                        color = if (live) ink.primary else ink.muted, size = 14f)
+                    else -> {
+                        val v = History.Span.of(k)?.let { History.totalReturn(this, t.symbol, it, q?.price, q?.pct) }
+                        cellView(v?.let(Fmt::pct) ?: (if (q?.price != null) "—" else ""), end = true,
+                            color = when {
+                                v == null || !live -> ink.muted
+                                v > 0.0049 -> ink.up
+                                v < -0.0049 -> ink.down
+                                else -> ink.muted
+                            }, size = 14f)
+                    }
                 }
             }
         }
         val symW = (symCells + symHeader).maxOf { natural(it) }
-        val colW = cols.indices.map { i -> maxOf(natural(heads[i]), grid.maxOfOrNull { natural(it[i]) } ?: 0, dp(48)) }
+        val colW = keys.indices.map { i ->
+            if (keys[i] == Columns.NOTES && notesFixed != null) notesFixed
+            else maxOf(natural(heads[i]), grid.maxOfOrNull { natural(it[i]) } ?: 0, dp(48))
+        }
 
         symHeader.layoutParams = LinearLayout.LayoutParams(symW, dp(34))
         heads.forEachIndexed { i, h -> headRow.addView(h, LinearLayout.LayoutParams(colW[i], dp(34))) }
@@ -280,10 +289,6 @@ class WatchlistActivity : Activity() {
         return v.measuredWidth
     }
 
-    /** Your label if you set one, else the company's full name from the price history, else the quote source's. */
-    private fun nameOf(t: Ticker, q: Store.Row?): String =
-        t.label ?: History.load(this, t.symbol)?.name ?: q?.name ?: ""
-
     private fun openQuote(cfg: Config, symbol: String) {
         val url = cfg.tapUrlFor(symbol)
         if (url.isBlank()) return
@@ -291,6 +296,77 @@ class WatchlistActivity : Activity() {
     }
 
     private fun openSettings() = startActivity(Intent(this, MainActivity::class.java))
+
+    /** Tap a notes cell: edit that ticker's note. */
+    private fun editNote(symbol: String) {
+        val input = android.widget.EditText(this).apply {
+            setText(Notes.get(this@WatchlistActivity, symbol))
+            setSelection(text.length)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+        }
+        val d = android.app.AlertDialog.Builder(this)
+            .setTitle("$symbol · ${Columns.notesTitle(this)}")
+            .setView(padded(input))
+            .setPositiveButton("Save") { _, _ -> Notes.set(this, symbol, input.text.toString()); render() }
+            .setNeutralButton("Clear") { _, _ -> Notes.set(this, symbol, ""); render() }
+            .setNegativeButton("Cancel", null)
+            .create()
+        input.setOnEditorActionListener { _, _, _ ->
+            Notes.set(this, symbol, input.text.toString()); render(); d.dismiss(); true
+        }
+        d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        d.show()
+        input.requestFocus()
+    }
+
+    /** Long-press the notes header: rename the column and set its width, with the table updating as you drag. */
+    private fun notesColumnDialog() {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(TextView(this).apply { text = "Column title"; textSize = 13f })
+        val titleIn = android.widget.EditText(this).apply {
+            setText(Columns.notesTitle(this@WatchlistActivity))
+            isSingleLine = true
+        }
+        box.addView(titleIn)
+        val wLabel = TextView(this).apply { textSize = 13f; setPadding(0, dp(14), 0, 0) }
+        fun label(p: Int) = if (p < MIN_NOTES_W) "Width: fit the longest note" else "Width: $p dp"
+        val start = Columns.notesWidthDp(this)
+        wLabel.text = label(start)
+        box.addView(wLabel)
+        box.addView(android.widget.SeekBar(this).apply {
+            max = MAX_NOTES_W
+            progress = start
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                    wLabel.text = label(p)
+                    Columns.setNotesWidthDp(this@WatchlistActivity, if (p < MIN_NOTES_W) 0 else p)
+                    render()
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+            })
+        })
+        box.addView(TextView(this).apply {
+            text = "Slide all the way left to fit the longest note. A fixed width wraps notes to two lines."
+            textSize = 12f
+            alpha = 0.65f
+        })
+        val d = android.app.AlertDialog.Builder(this)
+            .setTitle("Notes column")
+            .setView(padded(box))
+            .setPositiveButton("Done") { _, _ -> Columns.setNotesTitle(this, titleIn.text.toString()); render() }
+            .create()
+        // Sit low and dim lightly, so the table stays visible while the width changes.
+        d.window?.setGravity(Gravity.BOTTOM)
+        d.window?.setDimAmount(0.1f)
+        d.show()
+    }
+
+    private fun padded(v: View) = android.widget.FrameLayout(this).apply {
+        setPadding(dp(22), dp(8), dp(22), 0)
+        addView(v)
+    }
 
     // --- view helpers ---
 
@@ -338,8 +414,8 @@ class WatchlistActivity : Activity() {
 
     companion object {
         const val SYMBOL = "SYMBOL"
-        const val NAME = "NAME"
-        const val PRICE = "PRICE"
+        private const val MIN_NOTES_W = 40
+        private const val MAX_NOTES_W = 400
         private const val ROW_H = 46
     }
 }
@@ -371,9 +447,8 @@ object TableSort {
     fun apply(ctx: Context, tickers: List<Ticker>, snap: Store.Snapshot): List<Ticker> {
         val s = load(ctx)
         val key = s.key ?: return tickers
-        if (key == WatchlistActivity.SYMBOL || key == WatchlistActivity.NAME) {
-            fun text(t: Ticker) = if (key == WatchlistActivity.SYMBOL) t.symbol
-            else (t.label ?: History.load(ctx, t.symbol)?.name ?: snap.rows[t.symbol]?.name ?: "")
+        if (key == WatchlistActivity.SYMBOL || key == Columns.NOTES) {
+            fun text(t: Ticker) = if (key == WatchlistActivity.SYMBOL) t.symbol else Notes.get(ctx, t.symbol)
             // Blank names stay at the bottom in your order, whichever way the rest sort.
             val (named, blank) = tickers.partition { text(it).isNotBlank() }
             val sorted = named.sortedBy { text(it).lowercase() }
@@ -381,7 +456,7 @@ object TableSort {
         }
         fun value(t: Ticker): Double? {
             val q = snap.rows[t.symbol] ?: return null
-            if (key == WatchlistActivity.PRICE) return q.price
+            if (key == Columns.PRICE) return q.price
             val span = History.Span.of(key) ?: return null
             return History.totalReturn(ctx, t.symbol, span, q.price, q.pct)
         }

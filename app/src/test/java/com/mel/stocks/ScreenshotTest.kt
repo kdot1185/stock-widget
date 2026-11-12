@@ -21,6 +21,10 @@ class ScreenshotTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
 
     private fun seed(appBg: Int = 0) {
+        Notes.set(app, "MU", "HBM share gains; 1Q call Dec 17")
+        Notes.set(app, "SNDK", "Spun from WDC Feb 25")
+        Notes.set(app, "OBDC", "BDC, ~11% yield")
+        Notes.set(app, "SPY", "benchmark")
         Config.save(app, Config.load(app).copy(
             tickersText = "SNDK\nWDC\nMU\nMETA\nBITX\nKBR\nLRCX\nSPY\nBTC-USD\nNVDA\nGOOG\nOBDC",
             appBgColor = appBg,
@@ -96,6 +100,14 @@ class ScreenshotTest {
 
     @Test @RConfig(sdk = [35], qualifiers = "w384dp-h832dp-notnight-xxhdpi", fontScale = 1.3f)
     fun listBigFont() = shoot("list-bigfont")
+
+    @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-notnight-xxhdpi")
+    fun listCustomColumns() {
+        Columns.setOrder(app, listOf("1D", "1Y", "3Y", Columns.NOTES, Columns.PRICE))
+        Columns.setNotesWidthDp(app, 110)
+        Columns.setNotesTitle(app, "Thesis")
+        shoot("list-custom-columns")
+    }
 
     @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-notnight-xxhdpi")
     fun listNavy() = shoot("list-navy", appBg = 0xFF14213D.toInt())

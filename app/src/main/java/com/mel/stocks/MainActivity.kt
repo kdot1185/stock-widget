@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var appColorPick: Spinner
     private lateinit var appColorHex: EditText
     private lateinit var appTextMode: Spinner
+    private lateinit var columnBox: LinearLayout
     private lateinit var root: LinearLayout
     private lateinit var genericBox: LinearLayout
     private lateinit var etradeBox: LinearLayout
@@ -208,6 +209,15 @@ class MainActivity : Activity() {
             setSelection(Look.TEXT_MODES.indexOf(cfg.appTextMode).coerceAtLeast(0), false)
         }
         col.addView(appTextMode)
+
+        section("List columns")
+        hint("Order of the columns in the full-screen list; Symbol stays pinned on the left. In the list, tap a notes cell to edit it, and long-press the notes header to rename it or set its width.")
+        columnBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0x0F000000, 14)
+        }
+        col.addView(columnBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        drawColumns()
 
         section("Data source")
         hint("Pick a preset, or paste any JSON quote API. {symbol}, {key} and {secret} are filled in per ticker.")
@@ -657,6 +667,50 @@ class MainActivity : Activity() {
                 setBackgroundColor(0x14000000)
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { marginStart = dp(14) })
             tickerBox.addView(row)
+        }
+    }
+
+    // --- list column order ---
+
+    private fun drawColumns() {
+        columnBox.removeAllViews()
+        val keys = Columns.order(this)
+        for ((i, key) in keys.withIndex()) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(14), 0, dp(4), 0)
+                minimumHeight = dp(46)
+            }
+            row.addView(TextView(this).apply {
+                text = Columns.title(this@MainActivity, key) + if (key == Columns.PRICE) " (price)" else ""
+                textSize = 16f
+                setTextColor(ink)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            fun arrow(label: String, enabled: Boolean, desc: String, by: Int) = TextView(this).apply {
+                text = label
+                textSize = 18f
+                gravity = android.view.Gravity.CENTER
+                contentDescription = desc
+                setTextColor(ink)
+                alpha = if (enabled) 0.75f else 0.15f
+                isEnabled = enabled
+                setOnClickListener {
+                    val m = keys.toMutableList()
+                    val j = i + by
+                    if (j in m.indices) {
+                        m[i] = m[j].also { m[j] = m[i] }
+                        Columns.setOrder(this@MainActivity, m)
+                        drawColumns()
+                    }
+                }
+            }.also { row.addView(it, LinearLayout.LayoutParams(dp(42), dp(42))) }
+            arrow("↑", i > 0, "Move up", -1)
+            arrow("↓", i < keys.size - 1, "Move down", 1)
+            if (i > 0) columnBox.addView(android.widget.FrameLayout(this).apply {
+                setBackgroundColor(0x14000000)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { marginStart = dp(14) })
+            columnBox.addView(row)
         }
     }
 

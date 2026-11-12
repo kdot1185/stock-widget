@@ -122,11 +122,25 @@ class TotalReturnTest {
             println("LIST AAA ${span.label} = ${History.totalReturn(app, "AAA", span, 110.0, 10.0)}  BBB = ${History.totalReturn(app, "BBB", span, 50.0, -1.96)}")
         }
         assertEquals(5, rows.childCount) // 3 rows + 2 dividers
+        Notes.set(app, "AAA", "zebra")
+        Notes.set(app, "BBB", "apple")
         TableSort.tap(app, "1Y", true)
-        TableSort.tap(app, WatchlistActivity.NAME, false)
+        TableSort.tap(app, Columns.NOTES, false)
         val order = TableSort.apply(app, Config.load(app).tickers, Store.load(app)).map { it.symbol }
-        println("LIST name sort = $order")
-        assertEquals(listOf("AAA", "BBB", "CCC"), order) // "Aaa Incorporated", "Label B", then CCC with no name
+        println("LIST notes sort = $order")
+        assertEquals(listOf("BBB", "AAA", "CCC"), order) // "apple", "zebra", then CCC with no note
+
+        // Column order and a fixed notes width are honored on the next draw.
+        Columns.setOrder(app, listOf("3Y", "1D", Columns.NOTES))
+        Columns.setNotesWidthDp(app, 90)
+        val headF = WatchlistActivity::class.java.getDeclaredField("headRow").apply { isAccessible = true }
+        a.recreate()
+        val a2 = c.get()
+        val head = headF.get(a2) as LinearLayout
+        val titles = (0 until head.childCount).map { (head.getChildAt(it) as android.widget.TextView).text.toString() }
+        println("LIST headers = $titles")
+        assertEquals(listOf("3Y", "1D", "Notes"), titles.take(3))
+        assertEquals(Columns.ALL.size, titles.size)
         c.pause().stop().destroy()
         assertNull(Diag.last(app))
     }
