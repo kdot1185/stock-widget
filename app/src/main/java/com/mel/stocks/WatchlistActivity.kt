@@ -108,10 +108,6 @@ class WatchlistActivity : Activity() {
             root.setBackgroundColor(cfg.appBgColor or 0xFF000000.toInt())
             window.decorView.setBackgroundColor(cfg.appBgColor or 0xFF000000.toInt())
         }
-        // Status and navigation bar icons dark on a light background, light on a dark one.
-        val lightBars = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-            android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-        window.insetsController?.setSystemBarsAppearance(if (Look.appBgDark(cfg, phoneDark)) 0 else lightBars, lightBars)
         root.setOnApplyWindowInsetsListener { v, insets ->
             val b = insets.getInsets(WindowInsets.Type.systemBars())
             v.setPadding(b.left, b.top, b.right, b.bottom)
@@ -120,6 +116,11 @@ class WatchlistActivity : Activity() {
         setContentView(root)
         // The screen draws its own title row; the theme's action bar would repeat it.
         actionBar?.hide()
+        // Status and navigation bar icons dark on a light background, light on a dark one (needs the window's
+        // decor, which exists only once content is set).
+        val lightBars = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        window.insetsController?.setSystemBarsAppearance(if (Look.appBgDark(cfg, phoneDark)) 0 else lightBars, lightBars)
 
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
