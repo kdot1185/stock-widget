@@ -63,12 +63,12 @@ class ScreenshotTest {
         c.pause().stop().destroy()
     }
 
-    @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi-notnight")
+    @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-notnight-xxhdpi")
     fun listLight() = shoot("list-light")
 
-    @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi-night")
+    @Test @RConfig(sdk = [35], qualifiers = "w411dp-h891dp-night-xxhdpi")
     fun listDark() = shoot("list-dark")
 
-    @Test @RConfig(sdk = [35], qualifiers = "w891dp-h411dp-xxhdpi-land-notnight")
+    @Test @RConfig(sdk = [35], qualifiers = "w891dp-h411dp-land-notnight-xxhdpi")
     fun listLandscape() = shoot("list-landscape")
 }
