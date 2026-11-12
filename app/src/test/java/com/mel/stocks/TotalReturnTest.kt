@@ -137,7 +137,7 @@ class TotalReturnTest {
         c.recreate()
         val a2 = c.get()
         val head = headF.get(a2) as LinearLayout
-        val titles = (0 until head.childCount).map { (head.getChildAt(it) as android.widget.TextView).text.toString() }
+        val titles = (0 until head.childCount).map { (head.getChildAt(it) as android.widget.TextView).text.toString().removeSuffix(" ▲").removeSuffix(" ▼") }
         println("LIST headers = $titles")
         assertEquals(listOf("3Y", "1D", "Notes"), titles.take(3))
         assertEquals(Columns.ALL.size, titles.size)
