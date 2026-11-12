@@ -134,7 +134,7 @@ class TotalReturnTest {
         Columns.setOrder(app, listOf("3Y", "1D", Columns.NOTES))
         Columns.setNotesWidthDp(app, 90)
         val headF = WatchlistActivity::class.java.getDeclaredField("headRow").apply { isAccessible = true }
-        a.recreate()
+        c.recreate()
         val a2 = c.get()
         val head = headF.get(a2) as LinearLayout
         val titles = (0 until head.childCount).map { (head.getChildAt(it) as android.widget.TextView).text.toString() }
