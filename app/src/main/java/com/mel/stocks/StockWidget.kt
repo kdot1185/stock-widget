@@ -18,7 +18,6 @@ import android.os.Bundle
 import android.text.format.DateFormat
 import android.view.View
 import android.widget.RemoteViews
-import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -27,7 +26,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
-import kotlin.math.abs
 
 class StockWidget : AppWidgetProvider() {
 
@@ -74,6 +72,8 @@ class StockWidget : AppWidgetProvider() {
 
         private val busy = AtomicBoolean(false)
 
+        /** True while a refresh is running (another caller's refresh() returns immediately in that case). */
+        fun refreshing() = busy.get()
 
         fun hasWidgets(ctx: Context) =
             AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, StockWidget::class.java)).isNotEmpty()
@@ -92,7 +92,7 @@ class StockWidget : AppWidgetProvider() {
                 render(ctx, updating = true)
                 val cfg = Config.load(ctx)
                 Store.record(ctx, Quotes.fetchAll(ctx, cfg))
-                // Daily closes for Δ5D / Δ1M; at most one fetch per symbol per day, failures don't block quotes.
+                // Daily history for the return columns; at most one fetch per symbol per day, failures don't block quotes.
                 try { History.refresh(ctx, cfg.tickers.map { it.symbol }.distinct()) } catch (t: Throwable) { Diag.record(ctx, "history", t) }
             } catch (e: AuthNeeded) {
                 // Saved login → sign in unattended in a background job, which refreshes again when done.
@@ -220,10 +220,10 @@ class StockWidget : AppWidgetProvider() {
                         else -> ink.muted
                     })
                 }
-                cell(R.id.change, q?.pct)
-                val (d5, m1) = History.changes(ctx, t.symbol, q?.price)
-                cell(R.id.change5d, d5)
-                cell(R.id.change1m, m1)
+                // Total returns: dividends that went ex inside the window are added back.
+                cell(R.id.change, History.totalReturn(ctx, t.symbol, History.Span.D1, q?.price, q?.pct))
+                cell(R.id.change5d, History.totalReturn(ctx, t.symbol, History.Span.D5, q?.price, q?.pct))
+                cell(R.id.change1m, History.totalReturn(ctx, t.symbol, History.Span.M1, q?.price, q?.pct))
 
                 // Session (PRE/AH) is shown once in the "Last" header, not per row, so it never squeezes the ticker.
                 row.setViewVisibility(R.id.session, View.GONE)
@@ -235,7 +235,7 @@ class StockWidget : AppWidgetProvider() {
             return rv
         }
 
-        private fun strip(ctx: Context, s: Store.Snapshot, updating: Boolean): String {
+        internal fun strip(ctx: Context, s: Store.Snapshot, updating: Boolean): String {
             if (updating) return "Updating…"
             s.note?.let { return it }
             val why = s.err?.let { ": " + it.take(60) } ?: ""
@@ -257,30 +257,9 @@ class StockWidget : AppWidgetProvider() {
             return SimpleDateFormat("MMM d", Locale.US).format(Date(millis)) + ", " + time
         }
 
-        /**
-         * Accounting style: negatives in parentheses, positives unsigned with an invisible ")" so the % signs line up.
-         * 2 decimals under 10%, 1 under 100%, none above, to fit the column.
-         */
-        private fun pctText(v: Double): CharSequence {
-            val a = abs(v)
-            val num = String.format(Locale.US, if (a < 99.95) "%.1f%%" else "%.0f%%", a)
-            if (v < 0 && num.any { it in '1'..'9' }) return "($num)"
-            return android.text.SpannableString("$num)").apply {
-                setSpan(android.text.style.ForegroundColorSpan(android.graphics.Color.TRANSPARENT), num.length, num.length + 1, 0)
-            }
-        }
+        private fun pctText(v: Double): CharSequence = Fmt.pct(v)
 
-        private fun price(p: Double): String {
-            val digits = when {
-                abs(p) >= 1.0 -> 2
-                abs(p) >= 0.01 -> 4
-                else -> 6
-            }
-            return NumberFormat.getNumberInstance(Locale.US).apply {
-                minimumFractionDigits = digits
-                maximumFractionDigits = digits
-            }.format(p)
-        }
+        private fun price(p: Double): String = Fmt.price(p)
 
         private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
@@ -369,12 +348,8 @@ object Sort {
         val key = s.key ?: return tickers
         fun value(t: Ticker): Double? {
             val q = snap.rows[t.symbol] ?: return null
-            return when (key) {
-                "1D" -> q.pct
-                "5D" -> History.changes(ctx, t.symbol, q.price).first
-                "1M" -> History.changes(ctx, t.symbol, q.price).second
-                else -> null
-            }
+            val span = History.Span.of(key) ?: return null
+            return History.totalReturn(ctx, t.symbol, span, q.price, q.pct)
         }
         val withVal = tickers.map { it to value(it) }
         val known = withVal.filter { it.second != null }

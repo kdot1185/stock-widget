@@ -35,6 +35,9 @@ object Look {
         icon = 0xFFC7C7CC.toInt(), up = 0xFF6F8FFF.toInt(), down = 0xFFFF6B60.toInt(),
     )
 
+    /** Colors for an app screen on a light (false) or dark (true) background. */
+    fun inkFor(darkBackground: Boolean): Ink = if (darkBackground) LIGHT_TEXT else DARK_TEXT
+
     fun ink(cfg: Config): Ink = when (cfg.textMode) {
         "Dark text" -> DARK_TEXT
         "Light text" -> LIGHT_TEXT

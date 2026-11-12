@@ -58,7 +58,9 @@ class SmokeTest {
         for (s in listOf("MU", "SNDK", "META")) {
             val c = History.load(app, s)
             val last = c?.days?.lastOrNull()
-            println("HISTORY $s n=${c?.days?.size} last=$last changes(vs last close)=${History.changes(app, s, last?.second)}")
+            val tr = History.Span.values().filter { it != History.Span.D1 }
+                .joinToString(" ") { "${it.label}=${History.totalReturn(app, s, it, last?.close, 0.0)?.let { v -> String.format("%.1f", v) }}" }
+            println("HISTORY $s name=${c?.name} n=${c?.days?.size} first=${c?.days?.firstOrNull()?.date} last=$last divs=${c?.divs?.size} TR(vs last close): $tr")
         }
     }
 
