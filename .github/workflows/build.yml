@@ -52,6 +52,13 @@ jobs:
             echo '```'
           } > notes.md
           head -c 100000 notes.md > notes_trim.md
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: app/build/screens/*.png
+          if-no-files-found: ignore
       - name: Build
         run: gradle assembleDebug --stacktrace
       - name: Rename APK
