@@ -8,7 +8,6 @@ import android.content.res.Configuration
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -24,12 +23,12 @@ import kotlin.concurrent.thread
  */
 class WatchlistActivity : Activity() {
 
-    private data class Col(val key: String, val title: String, val widthDp: Int, val numeric: Boolean)
+    private data class Col(val key: String, val title: String, val numeric: Boolean)
 
     private val cols = listOf(
-        Col(NAME, "Name", 160, false),
-        Col(PRICE, "Last", 84, true),
-    ) + History.Span.values().map { Col(it.label, it.label, 64, true) }
+        Col(NAME, "Name", false),
+        Col(PRICE, "Last", true),
+    ) + History.Span.values().map { Col(it.label, it.label, true) }
 
     private lateinit var status: TextView
     private lateinit var symHeader: TextView
@@ -39,6 +38,7 @@ class WatchlistActivity : Activity() {
     private lateinit var bodyScroll: HorizontalScrollView
     private lateinit var bodyRows: LinearLayout
     private var ink = Look.inkFor(false)
+    private var appliedLook: Pair<Int, String>? = null
     private var updating = false
     private var ready = false
 
@@ -65,6 +65,8 @@ class WatchlistActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (!ready) return
+        val cfg = Config.load(this)
+        if (appliedLook != (cfg.appBgColor to cfg.appTextMode)) { recreate(); return }
         render()
         // Quotes older than a minute, or history not yet fetched today for some ticker: refresh in the background.
         val snap = Store.load(this)
@@ -96,10 +98,20 @@ class WatchlistActivity : Activity() {
     }
 
     private fun build() {
-        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        ink = Look.inkFor(dark)
+        val cfg = Config.load(this)
+        val phoneDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        ink = Look.appInk(cfg, phoneDark)
+        appliedLook = cfg.appBgColor to cfg.appTextMode
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (cfg.appBgColor != 0) {
+            root.setBackgroundColor(cfg.appBgColor or 0xFF000000.toInt())
+            window.decorView.setBackgroundColor(cfg.appBgColor or 0xFF000000.toInt())
+        }
+        // Status and navigation bar icons dark on a light background, light on a dark one.
+        val lightBars = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        window.insetsController?.setSystemBarsAppearance(if (Look.appBgDark(cfg, phoneDark)) 0 else lightBars, lightBars)
         root.setOnApplyWindowInsetsListener { v, insets ->
             val b = insets.getInsets(WindowInsets.Type.systemBars())
             v.setPadding(b.left, b.top, b.right, b.bottom)
@@ -134,7 +146,7 @@ class WatchlistActivity : Activity() {
 
         // Header: pinned "Symbol" + a strip that follows the body's sideways scroll.
         val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        symHeader = headerCell(SYMBOL, "Symbol", SYM_W, numeric = false)
+        symHeader = headerCell(SYMBOL, "Symbol", numeric = false)
         head.addView(symHeader)
         headRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         headScroll = HorizontalScrollView(this).apply {
@@ -148,13 +160,10 @@ class WatchlistActivity : Activity() {
 
         val content = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         symCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(symCol, LinearLayout.LayoutParams(dp(SYM_W), LinearLayout.LayoutParams.WRAP_CONTENT))
+        content.addView(symCol, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         bodyRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         bodyScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            // Faded right edge: a cue that more columns sit off-screen.
-            isHorizontalFadingEdgeEnabled = true
-            setFadingEdgeLength(dp(28))
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(bodyRows)
         }
@@ -187,54 +196,37 @@ class WatchlistActivity : Activity() {
         fun title(key: String, t: String) = t + if (sort.key == key) (if (sort.desc) " ▼" else " ▲") else ""
         symHeader.text = title(SYMBOL, "Symbol")
         symHeader.setTextColor(if (sort.key == SYMBOL) ink.primary else ink.muted)
-        headRow.removeAllViews()
-        for (c in cols) {
-            val h = headerCell(c.key, title(c.key, c.title), c.widthDp, c.numeric)
-            if (sort.key == c.key) h.setTextColor(ink.primary)
-            headRow.addView(h)
+        val heads = cols.map { c ->
+            headerCell(c.key, title(c.key, c.title), c.numeric).apply { if (sort.key == c.key) setTextColor(ink.primary) }
         }
 
+        headRow.removeAllViews()
         symCol.removeAllViews()
         bodyRows.removeAllViews()
         val tickers = TableSort.apply(this, cfg.tickers, snap)
-        if (tickers.isEmpty()) {
-            symCol.addView(TextView(this).apply {
-                text = "No tickers · tap ⚙ to add"
-                textSize = 14f
-                setTextColor(ink.muted)
-                setPadding(dp(16), dp(16), 0, 0)
-                isSingleLine = true
-            }, LinearLayout.LayoutParams(dp(260), LinearLayout.LayoutParams.WRAP_CONTENT))
-            return
-        }
 
-        for ((i, t) in tickers.withIndex()) {
+        // Build every cell first, then size each column to its widest entry so nothing is ever cut off.
+        val symCells = mutableListOf<TextView>()
+        val grid = mutableListOf<List<TextView>>()
+        for (t in tickers) {
             val q = snap.rows[t.symbol]
             val live = q != null && !q.stale
             val open = View.OnClickListener { openQuote(cfg, t.symbol) }
-
-            symCol.addView(cellView(t.symbol, SYM_W, end = false, color = ink.primary, size = 15f, medium = true).apply {
-                setPadding(dp(16), 0, dp(4), 0)
-                setOnClickListener(open)
-                background = ripple()
-            }, LinearLayout.LayoutParams(dp(SYM_W), dp(ROW_H)))
-
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
+            symCells += cellView(t.symbol, end = false, color = ink.primary, size = 15f, medium = true).apply {
+                setPadding(dp(16), 0, dp(6), 0)
                 setOnClickListener(open)
                 background = ripple()
             }
-            for (c in cols) {
+            grid += cols.map { c ->
                 val v = when (c.key) {
                     NAME -> null
                     PRICE -> q?.price
                     else -> History.Span.of(c.key)?.let { History.totalReturn(this, t.symbol, it, q?.price, q?.pct) }
                 }
-                val view = when (c.key) {
-                    NAME -> cellView(nameOf(t, q), c.widthDp, end = false, color = ink.muted, size = 13f)
-                    PRICE -> cellView(v?.let(Fmt::price) ?: "—", c.widthDp, end = true,
-                        color = if (live) ink.primary else ink.muted, size = 14f)
-                    else -> cellView(v?.let(Fmt::pct) ?: (if (q?.price != null) "—" else ""), c.widthDp, end = true,
+                when (c.key) {
+                    NAME -> cellView(nameOf(t, q), end = false, color = ink.muted, size = 13f)
+                    PRICE -> cellView(v?.let(Fmt::price) ?: "—", end = true, color = if (live) ink.primary else ink.muted, size = 14f)
+                    else -> cellView(v?.let(Fmt::pct) ?: (if (q?.price != null) "—" else ""), end = true,
                         color = when {
                             v == null || !live -> ink.muted
                             v > 0.0049 -> ink.up
@@ -242,10 +234,35 @@ class WatchlistActivity : Activity() {
                             else -> ink.muted
                         }, size = 14f)
                 }
-                row.addView(view)
             }
-            bodyRows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(ROW_H)))
+        }
+        val symW = (symCells + symHeader).maxOf { natural(it) }
+        val colW = cols.indices.map { i -> maxOf(natural(heads[i]), grid.maxOfOrNull { natural(it[i]) } ?: 0, dp(48)) }
 
+        symHeader.layoutParams = LinearLayout.LayoutParams(symW, dp(34))
+        heads.forEachIndexed { i, h -> headRow.addView(h, LinearLayout.LayoutParams(colW[i], dp(34))) }
+
+        if (tickers.isEmpty()) {
+            symCol.addView(TextView(this).apply {
+                text = "No tickers · tap ⚙ to add"
+                textSize = 14f
+                setTextColor(ink.muted)
+                setPadding(dp(16), dp(16), 0, 0)
+                isSingleLine = true
+            })
+            return
+        }
+
+        for ((i, t) in tickers.withIndex()) {
+            val open = View.OnClickListener { openQuote(cfg, t.symbol) }
+            symCol.addView(symCells[i], LinearLayout.LayoutParams(symW, dp(ROW_H)))
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setOnClickListener(open)
+                background = ripple()
+            }
+            grid[i].forEachIndexed { j, cell -> row.addView(cell, LinearLayout.LayoutParams(colW[j], LinearLayout.LayoutParams.MATCH_PARENT)) }
+            bodyRows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(ROW_H)))
             if (i < tickers.size - 1) {
                 symCol.addView(line(), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { marginStart = dp(16) })
                 bodyRows.addView(line(), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
@@ -254,6 +271,12 @@ class WatchlistActivity : Activity() {
         // Room at the end of the sideways scroll so the 3Y column doesn't sit flush against the edge.
         bodyRows.setPadding(0, 0, dp(12), dp(24))
         headRow.setPadding(0, 0, dp(12), 0)
+    }
+
+    /** Width the text needs on one line, padding included, at the phone's font size. */
+    private fun natural(v: TextView): Int {
+        v.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        return v.measuredWidth
     }
 
     /** Your label if you set one, else the company's full name from the price history, else the quote source's. */
@@ -272,24 +295,21 @@ class WatchlistActivity : Activity() {
 
     private fun dp(x: Int) = (x * resources.displayMetrics.density).toInt()
 
-    private fun cellView(text: CharSequence, widthDp: Int, end: Boolean, color: Int, size: Float, medium: Boolean = false) =
+    private fun cellView(text: CharSequence, end: Boolean, color: Int, size: Float, medium: Boolean = false) =
         TextView(this).apply {
             this.text = text
             textSize = size
             setTextColor(color)
             isSingleLine = true
-            ellipsize = TextUtils.TruncateAt.END
             fontFeatureSettings = "tnum"
             if (medium) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             gravity = Gravity.CENTER_VERTICAL or (if (end) Gravity.END else Gravity.START)
-            setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = LinearLayout.LayoutParams(dp(widthDp), LinearLayout.LayoutParams.MATCH_PARENT)
+            setPadding(dp(8), 0, dp(8), 0)
         }
 
-    private fun headerCell(key: String, title: String, widthDp: Int, numeric: Boolean) =
-        cellView(title, widthDp, end = numeric, color = ink.muted, size = 12f).apply {
-            if (key == SYMBOL) setPadding(dp(16), 0, dp(4), 0)
-            layoutParams = LinearLayout.LayoutParams(dp(widthDp), dp(34))
+    private fun headerCell(key: String, title: String, numeric: Boolean) =
+        cellView(title, end = numeric, color = ink.muted, size = 12f).apply {
+            if (key == SYMBOL) setPadding(dp(16), 0, dp(6), 0)
             setOnClickListener {
                 TableSort.tap(this@WatchlistActivity, key, numeric)
                 render()
@@ -319,7 +339,6 @@ class WatchlistActivity : Activity() {
         const val SYMBOL = "SYMBOL"
         const val NAME = "NAME"
         const val PRICE = "PRICE"
-        private const val SYM_W = 84
         private const val ROW_H = 46
     }
 }

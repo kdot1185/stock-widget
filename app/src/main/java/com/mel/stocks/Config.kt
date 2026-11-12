@@ -30,6 +30,8 @@ data class Config(
     val opacity: Int = 100,
     val textMode: String = "Auto",
     val apiSecret: String = "",
+    val appBgColor: Int = 0,          // full-screen list background; 0 = follow the phone's light/dark setting
+    val appTextMode: String = "Auto",
 ) {
     /** One ticker per line (commas also work). Anything after the symbol is a display label: "GC=F Gold". */
     val tickers: List<Ticker>
@@ -91,6 +93,8 @@ data class Config(
                 opacity = p.getInt("opacity", 100),
                 textMode = p.getString("textMode", "Auto")!!,
                 apiSecret = p.getString("apiSecret", "")!!,
+                appBgColor = p.getInt("appBgColor", 0),
+                appTextMode = p.getString("appTextMode", "Auto")!!,
             )
         }
 
@@ -116,6 +120,8 @@ data class Config(
                 .putInt("opacity", c.opacity)
                 .putString("textMode", c.textMode)
                 .putString("apiSecret", c.apiSecret)
+                .putInt("appBgColor", c.appBgColor)
+                .putString("appTextMode", c.appTextMode)
                 .apply()
         }
 

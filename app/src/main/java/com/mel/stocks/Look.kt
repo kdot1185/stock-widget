@@ -38,6 +38,19 @@ object Look {
     /** Colors for an app screen on a light (false) or dark (true) background. */
     fun inkFor(darkBackground: Boolean): Ink = if (darkBackground) LIGHT_TEXT else DARK_TEXT
 
+    val APP_BG_FOLLOW = "Follow phone (light/dark)"
+    val APP_BG_NAMES = listOf(APP_BG_FOLLOW) + SWATCH_NAMES
+
+    /** True when the list screen's background is dark: the chosen color's, or the phone's when following it. */
+    fun appBgDark(cfg: Config, phoneDark: Boolean): Boolean =
+        if (cfg.appBgColor == 0) phoneDark else luminance(cfg.appBgColor) < 0.45
+
+    fun appInk(cfg: Config, phoneDark: Boolean): Ink = when (cfg.appTextMode) {
+        "Dark text" -> DARK_TEXT
+        "Light text" -> LIGHT_TEXT
+        else -> inkFor(appBgDark(cfg, phoneDark))
+    }
+
     fun ink(cfg: Config): Ink = when (cfg.textMode) {
         "Dark text" -> DARK_TEXT
         "Light text" -> LIGHT_TEXT

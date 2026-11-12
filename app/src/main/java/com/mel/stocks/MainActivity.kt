@@ -54,6 +54,9 @@ class MainActivity : Activity() {
     private lateinit var opacitySeek: SeekBar
     private lateinit var opacityLabel: TextView
     private lateinit var textMode: Spinner
+    private lateinit var appColorPick: Spinner
+    private lateinit var appColorHex: EditText
+    private lateinit var appTextMode: Spinner
     private lateinit var root: LinearLayout
     private lateinit var genericBox: LinearLayout
     private lateinit var etradeBox: LinearLayout
@@ -186,6 +189,26 @@ class MainActivity : Activity() {
         }
         col.addView(textMode)
 
+        section("App colors")
+        hint("For the full-screen list. Takes effect when you go back to it.")
+        label("Background")
+        appColorPick = Spinner(this).apply {
+            adapter = choices(Look.APP_BG_NAMES)
+            val idx = if (cfg.appBgColor == 0) 0
+            else Look.SWATCHES.indexOfFirst { (it.second and 0xFFFFFF) == (cfg.appBgColor and 0xFFFFFF) }
+                .let { if (it >= 0) it + 1 else Look.APP_BG_NAMES.size - 1 }
+            setSelection(idx, false)
+        }
+        col.addView(appColorPick)
+        hint("Or any hex color:")
+        appColorHex = field(if (cfg.appBgColor == 0) "" else Look.hex(cfg.appBgColor), mono = true)
+        label("Text color")
+        appTextMode = Spinner(this).apply {
+            adapter = choices(Look.TEXT_MODES)
+            setSelection(Look.TEXT_MODES.indexOf(cfg.appTextMode).coerceAtLeast(0), false)
+        }
+        col.addView(appTextMode)
+
         section("Data source")
         hint("Pick a preset, or paste any JSON quote API. {symbol}, {key} and {secret} are filled in per ticker.")
         preset = Spinner(this).apply {
@@ -311,6 +334,29 @@ class MainActivity : Activity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) = preview()
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+
+        appColorPick.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                when {
+                    position == 0 -> if (appColorHex.text.isNotEmpty()) appColorHex.setText("")
+                    position <= Look.SWATCHES.size -> appColorHex.setText(Look.hex(Look.SWATCHES[position - 1].second))
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        appColorHex.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(e: Editable?) {
+                val t = e.toString().trim()
+                val want = if (t.isEmpty()) 0 else {
+                    val c = Look.parseHex(t) ?: return
+                    val idx = Look.SWATCHES.indexOfFirst { (it.second and 0xFFFFFF) == (c and 0xFFFFFF) }
+                    if (idx >= 0) idx + 1 else Look.APP_BG_NAMES.size - 1
+                }
+                if (appColorPick.selectedItemPosition != want) appColorPick.setSelection(want, false)
+            }
+        })
 
         preset.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -458,6 +504,9 @@ class MainActivity : Activity() {
             bgColor = Look.parseHex(colorHex.text.toString()) ?: Config.load(this).bgColor,
             opacity = opacitySeek.progress,
             textMode = Look.TEXT_MODES[textMode.selectedItemPosition.coerceAtLeast(0)],
+            appBgColor = if (appColorPick.selectedItemPosition <= 0) 0
+                else Look.parseHex(appColorHex.text.toString()) ?: Config.load(this).appBgColor,
+            appTextMode = Look.TEXT_MODES[appTextMode.selectedItemPosition.coerceAtLeast(0)],
         )
     }
 
