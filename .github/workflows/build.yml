@@ -52,13 +52,19 @@ jobs:
             echo '```'
           } > notes.md
           head -c 100000 notes.md > notes_trim.md
-      - name: Upload screenshots
+      - name: Publish screenshots to the ci-screens branch
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screens
-          path: app/build/screens/*.png
-          if-no-files-found: ignore
+        run: |
+          [ -d app/build/screens ] && ls app/build/screens/*.png >/dev/null 2>&1 || exit 0
+          tmp=$(mktemp -d)
+          cp app/build/screens/*.png "$tmp"/
+          cd "$tmp"
+          git init -q -b ci-screens
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screens for build ${{ github.run_number }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-screens
       - name: Build
         run: gradle assembleDebug --stacktrace
       - name: Rename APK
