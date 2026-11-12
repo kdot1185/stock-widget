@@ -106,6 +106,8 @@ class WatchlistActivity : Activity() {
             insets
         }
         setContentView(root)
+        // The screen draws its own title row; the theme's action bar would repeat it.
+        actionBar?.hide()
 
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -150,6 +152,9 @@ class WatchlistActivity : Activity() {
         bodyRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         bodyScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
+            // Faded right edge: a cue that more columns sit off-screen.
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(28))
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(bodyRows)
         }
