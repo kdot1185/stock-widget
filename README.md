@@ -8,6 +8,6 @@ Android home-screen watchlist styled after Yahoo Finance's widget, with the bann
 - **Full list.** The app icon opens the whole watchlist with every column: symbol (pinned), company name, last price, and total return over 1D, 5D, 1M, 3M, 6M, 1Y and 3Y. The table scrolls sideways; tap a header to sort; ⚙ opens settings.
 - **Total returns.** Every return column, on the widget too, adds back dividends: three years of daily closes, dividend-adjusted closes and dividends come from Yahoo's chart endpoint once per symbol per day, whatever the quote source.
 - **Refresh.** Tap ⟳, a background refresh every N minutes (Android's floor is 15), and an exact-alarm refresh at a set morning time (default 06:55).
-- Tap the "Updated" strip to open settings; tap a row to open its quote page.
+- On the widget, only buttons do anything: ⚙ (above the Δ5D label) opens settings, ⟳ refreshes, a Δ header sorts, a row opens its quote page. Taps anywhere else are swallowed.
 
 Every push to `main` builds an APK and publishes it under Releases.

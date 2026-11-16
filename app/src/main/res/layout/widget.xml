@@ -44,6 +44,22 @@
                 android:textColor="#FF86868B"
                 android:textSize="12dp" />
 
+            <!-- Settings: the only way into the app from the widget. Sized like refresh; its icon's right edge lines up
+                 with the right edge of the Δ5D label (66dp from the right, since the 1M column is 66dp wide and the refresh
+                 icon's right edge sits on the content edge). 61dp view edge + 5dp end padding = 66dp; refresh takes 21dp. -->
+            <ImageView
+                android:id="@+id/settings"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="40dp"
+                android:contentDescription="Settings"
+                android:paddingStart="6dp"
+                android:paddingEnd="5dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:src="@drawable/ic_settings"
+                android:tint="#FF6E6E73" />
+
             <ImageView
                 android:id="@+id/refresh"
                 android:layout_width="26dp"
@@ -164,7 +180,7 @@
                 android:layout_height="match_parent"
                 android:fontFamily="sans-serif"
                 android:gravity="center"
-                android:text="Tap to add tickers"
+                android:text="Add tickers in ⚙ settings"
                 android:textColor="#FF86868B"
                 android:textSize="14dp"
                 android:visibility="gone" />

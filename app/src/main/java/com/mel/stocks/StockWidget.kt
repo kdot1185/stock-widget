@@ -48,6 +48,7 @@ class StockWidget : AppWidgetProvider() {
                 Sort.tap(context, intent.action!!.substringAfterLast('_'))
                 render(context)
             }
+            ACTION_NOOP -> Unit
             ACTION_MORNING -> {
                 try { Scheduler.scheduleMorning(context) } catch (t: Throwable) { Diag.record(context, "morning alarm", t) }
                 refreshAsync(context, goAsync())
@@ -69,6 +70,7 @@ class StockWidget : AppWidgetProvider() {
         const val ACTION_SORT_1D = "com.mel.stocks.SORT_1D"
         const val ACTION_SORT_5D = "com.mel.stocks.SORT_5D"
         const val ACTION_SORT_1M = "com.mel.stocks.SORT_1M"
+        const val ACTION_NOOP = "com.mel.stocks.NOOP"
 
         private val busy = AtomicBoolean(false)
 
@@ -97,7 +99,7 @@ class StockWidget : AppWidgetProvider() {
             } catch (e: AuthNeeded) {
                 // Saved login → sign in unattended in a background job, which refreshes again when done.
                 if (allowAutoLogin && AutoLogin.request(ctx)) Store.note(ctx, "Signing in to E*TRADE…")
-                else Store.note(ctx, "${e.message} · tap here")
+                else Store.note(ctx, "${e.message} · tap ⚙")
             } catch (e: Throwable) {
                 // Keep the last good snapshot; the strip will show the old time.
                 Diag.record(ctx, "refresh", e)
@@ -114,19 +116,14 @@ class StockWidget : AppWidgetProvider() {
             val rv = try {
                 build(ctx, updating)
             } catch (t: Throwable) {
-                // Never leave the widget blank or crash the app: say what broke, tap opens settings with the trace.
+                // Never leave the widget blank or crash the app: say what broke; the gear opens settings with the trace.
                 Diag.record(ctx, "widget render", t)
                 RemoteViews(ctx.packageName, R.layout.widget).apply {
                     setTextViewText(R.id.updated, "Error: ${t.javaClass.simpleName}${t.message?.let { " – $it" } ?: ""}")
                     setViewVisibility(R.id.list, View.GONE)
                     setViewVisibility(R.id.empty, View.VISIBLE)
-                    setTextViewText(R.id.empty, "Tap for details")
-                    val pi = PendingIntent.getActivity(
-                        ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
-                    )
-                    setOnClickPendingIntent(R.id.updated, pi)
-                    setOnClickPendingIntent(R.id.empty, pi)
-                    setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
+                    setTextViewText(R.id.empty, "Details in ⚙ settings")
+                    wireButtons(ctx, this)
                 }
             }
             try {
@@ -161,12 +158,9 @@ class StockWidget : AppWidgetProvider() {
                 rv.setOnClickPendingIntent(id, broadcast(ctx, action, code))
             }
 
-            val settings = PendingIntent.getActivity(
-                ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
-            )
+            rv.setInt(R.id.settings, "setColorFilter", ink.icon)
             rv.setTextViewText(R.id.updated, strip(ctx, snap, updating))
-            rv.setOnClickPendingIntent(R.id.updated, settings)
-            rv.setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
+            wireButtons(ctx, rv)
 
             val tickers = Sort.apply(ctx, cfg.tickers, Store.load(ctx))
             val sessions = tickers.mapNotNull { snap.rows[it.symbol]?.takeIf { r -> !r.stale }?.session }
@@ -178,7 +172,6 @@ class StockWidget : AppWidgetProvider() {
             if (tickers.isEmpty()) {
                 rv.setViewVisibility(R.id.list, View.GONE)
                 rv.setViewVisibility(R.id.empty, View.VISIBLE)
-                rv.setOnClickPendingIntent(R.id.empty, settings)
                 return rv
             }
             rv.setViewVisibility(R.id.list, View.VISIBLE)
@@ -249,7 +242,23 @@ class StockWidget : AppWidgetProvider() {
                     else -> "Updated $t"
                 }
             }
-            return if (Diag.last(ctx) != null) "⚠ App error logged · tap · $base" else base
+            return if (Diag.last(ctx) != null) "⚠ App error logged · tap ⚙ · $base" else base
+        }
+
+        /**
+         * The gear is the only way into the app; refresh and the Δ headers (wired in build) are the other buttons, rows
+         * open the quote page. Everything else — the "Updated" text, blank card, padding — swallows the tap with a
+         * broadcast we ignore, so a stray touch can't fall through to a launcher that opens the app on unhandled taps.
+         */
+        private fun wireButtons(ctx: Context, rv: RemoteViews) {
+            rv.setOnClickPendingIntent(R.id.root, broadcast(ctx, ACTION_NOOP, 14))
+            rv.setOnClickPendingIntent(
+                R.id.settings,
+                PendingIntent.getActivity(
+                    ctx, 10, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS,
+                ),
+            )
+            rv.setOnClickPendingIntent(R.id.refresh, broadcast(ctx, ACTION_REFRESH, 11))
         }
 
         private fun stamp(ctx: Context, millis: Long): String {

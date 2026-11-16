@@ -17,7 +17,7 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault.DayNight">
 
-        <!-- The app icon opens the full list; settings sit behind its gear (and the widget's "Updated" strip). -->
+        <!-- The app icon opens the full list; settings sit behind its gear, and behind the widget's gear. -->
         <activity
             android:name=".WatchlistActivity"
             android:exported="true">
